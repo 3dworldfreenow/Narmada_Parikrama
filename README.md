@@ -7,6 +7,8 @@ An English, searchable guide to the full Narmada Parikrama (about 2,934 km, 805 
 - **Search and filters.** Search by village, temple or ashram in English, or by Marathi village name. Filter by stage, cooked food, sadavrat (rations), place to stay, built ghat, bridge or special note.
 - **Accounts.** Users register with name, email, mobile number and password. Mobile and email are visible only to the admin.
 - **Community updates.** Any logged-in user can suggest changes to any stop, as many times as they like. Each update records who made it, when, and an optional "how do you know?" note.
+- **Must be at the place (GPS).** An update can only be sent from the stop itself. The browser's GPS position is checked against the stop's location (default: within 3 km). The guide has no map coordinates yet, so the **first approved update sent from a stop sets its map location**. After that, every update is distance-checked. The admin sees the sender's position on Google Maps, and can clear a wrong location.
+- **Photos, video and links.** Users can attach up to 6 photos (resized to 1920 px; EXIF data, including phone GPS, is removed), one video of **max 60 seconds** (checked in the browser and again on the server for MP4/MOV), and up to 3 YouTube or other links. YouTube links play inside the page. Photos and videos stay private until the update is approved, then show in the stop's gallery with "by NAME".
 - **Approval.** Updates from normal users wait in the admin's **Approvals** queue. The admin sees the old value and the new value side by side, then approves or rejects with a note to the user.
 - **Super users.** On the **Users** page the admin can make anyone a *super user*, whose updates go live at once. The admin can also tick "make super user" while approving an update.
 - **Credit for updates.** Every stop shows "Updated by NAME · date", and has a full update history.
@@ -42,7 +44,7 @@ PythonAnywhere keeps your SQLite database safe between restarts.
 
 1. Sign up at pythonanywhere.com, then open a **Bash console**.
 2. Run: `git clone https://github.com/3dworldfreenow/Narmada_Parikrama.git`
-3. Run: `pip install --user flask`
+3. Run: `pip install --user flask pillow`
 4. In the **Web** tab, choose **Add a new web app → Manual configuration → Python 3.x**.
 5. Set the source code folder to `/home/YOURNAME/Narmada_Parikrama`.
 6. In the WSGI file, replace the contents with:
@@ -77,6 +79,14 @@ On PythonAnywhere: `cd Narmada_Parikrama && git pull`, then click **Reload**. Yo
 | `SECRET_KEY` | **Required in production.** A long random string that keeps logins secure. |
 | `DATABASE_PATH` | Where the SQLite file lives (default `instance/narmada.db`). |
 | `ADMIN_EMAILS` | Optional. Emails that become admin when they register. |
+| `UPLOAD_DIR` | Where photos and videos are stored (default `instance/uploads`). |
+| `GPS_RADIUS_KM` | How close a user must be to a stop (default `3`). |
+| `GPS_MAX_ACCURACY_M` | Reject GPS readings less accurate than this (default `1000`). |
+| `REQUIRE_GPS` | Set to `0` to turn the location check off. |
+
+**GPS needs HTTPS.** Phones only share location with `https://` sites. PythonAnywhere and Render give you HTTPS automatically. Admins can update without GPS. GPS can be faked by a determined person, so the admin approval step still matters.
+
+**Storage.** Videos take space: 100 one-minute videos can use 3–5 GB. PythonAnywhere's free plan has 512 MB, so you may need a paid plan or a lower `MAX_VIDEO_MB` in `app.py` as uploads grow.
 
 Make an existing account admin from the command line with `flask --app app make-admin`.
 

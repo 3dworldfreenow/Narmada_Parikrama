@@ -1,0 +1,18 @@
+{% if items %}
+<div class="mediarow">
+  {% for m in items %}
+    {% if m.kind == 'photo' %}
+      <a href="{{ url_for('media_file', media_id=m.id) }}" target="_blank" rel="noopener"><img src="{{ url_for('media_file', media_id=m.id) }}" alt="Photo" loading="lazy"></a>
+    {% elif m.kind == 'video' %}
+      <video src="{{ url_for('media_file', media_id=m.id) }}" controls preload="metadata"></video>
+    {% elif m.kind == 'link' %}
+      {% set yt = youtube_id(m.path) %}
+      {% if yt %}
+        <iframe src="https://www.youtube-nocookie.com/embed/{{ yt }}" title="YouTube video" allowfullscreen loading="lazy"></iframe>
+      {% else %}
+        <a class="linkcard" href="{{ m.path }}" target="_blank" rel="noopener nofollow ugc">🔗 {{ m.path|truncate(60, true) }}</a>
+      {% endif %}
+    {% endif %}
+  {% endfor %}
+</div>
+{% endif %}

@@ -8,7 +8,14 @@
     <div class="card" style="padding:14px 16px;margin:14px 0">
       <p style="margin:0 0 4px"><a class="vlink" href="{{ url_for('stop_detail', stop_id=e.stop_id) }}"><b>{{ e.village or 'Stop' }}</b></a> <span class="meta">· Stage {{ e.stage }}, No. {{ e.serial }} · sent {{ e.created_at }}</span></p>
       <p class="meta" style="margin:0">By <b>{{ e.user_name }}</b> · {{ e.email }} · {{ e.mobile }}</p>
-      {% include "_changes.html" %}
+      <p class="meta" style="margin:6px 0">
+        {% if e.lat is not none %}📍 Sent from <a href="https://www.google.com/maps?q={{ e.lat }},{{ e.lng }}" target="_blank" rel="noopener">{{ '%.5f'|format(e.lat) }}, {{ '%.5f'|format(e.lng) }}</a>
+          {% if e.accuracy is not none %}(±{{ e.accuracy|round|int }} m){% endif %}
+          {% if e.distance_km is not none %} · <b>{{ '%.1f'|format(e.distance_km) }} km</b> from the stop{% elif e.stop_lat is none %} · stop not on map yet – approving will set its location here{% endif %}
+        {% else %}<span style="color:var(--saffron)">⚠ No GPS location</span>{% endif %}
+      </p>
+      {% if e.changes %}{% include "_changes.html" %}{% else %}{% if e.note %}<p class="meta">Note: {{ e.note }}</p>{% endif %}{% endif %}
+      {% set items = media.get(e.id, []) %}{% include "_media.html" %}
       <form method="post" action="{{ url_for('admin_review', edit_id=e.id) }}" class="row">
         <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
         <input type="text" name="review_note" placeholder="Note to user (optional)" style="flex:1 1 240px">

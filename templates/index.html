@@ -35,6 +35,7 @@
       <label class="chip"><input type="checkbox" id="fBridge"> Bridge</label>
       <label class="chip"><input type="checkbox" id="fNote"> Has a special note</label>
       <label class="chip"><input type="checkbox" id="fUpd"> Updated by users</label>
+      <label class="chip"><input type="checkbox" id="fPm"> Has photos/videos</label>
       <span class="count" id="count"></span>
     </div>
   </div>
@@ -105,13 +106,13 @@ function render(){
   const q = $("#q").value.trim().toLowerCase();
   const terms = q.split(/\s+/).filter(Boolean);
   const f = {food:$("#fFood").checked, rat:$("#fRat").checked, stay:$("#fStay").checked,
-             ghat:$("#fGhat").checked, upd:$("#fUpd").checked, br:$("#fBridge").checked, note:$("#fNote").checked};
+             ghat:$("#fGhat").checked, upd:$("#fUpd").checked, pm:$("#fPm").checked, br:$("#fBridge").checked, note:$("#fNote").checked};
   const rows = DATA.filter(o =>
     (!stage || o.st === stage) &&
     terms.every(t => o._s.includes(t)) &&
     (!f.food || o.fd === "Yes") && (!f.rat || o.sd === "Yes") &&
     (!f.stay || !isNo(o.acc)) && (!f.ghat || !isNo(o.gh)) &&
-    (!f.br || !isNo(o.br)) && (!f.note || o.sp) && (!f.upd || o.ub));
+    (!f.br || !isNo(o.br)) && (!f.note || o.sp) && (!f.upd || o.ub) && (!f.pm || o.pm));
   $("#count").textContent = rows.length + " of " + DATA.length + " stops";
   if (!rows.length){ $("#out").innerHTML = '<div class="card empty">No stops match. Try a different spelling, or search in Marathi.</div>'; return; }
   let html = "";
@@ -126,7 +127,7 @@ function render(){
     rs.forEach(o => {
       html += `<tr>
         <td class="num" data-l="No.">${o.n === "" ? "·" : o.n}</td>
-        <td data-l="Village"><div><div class="vname"><a class="vlink" href="${STOP_URL}${o.id}">${o.v ? hl(o.v,terms) : '(not named)'}</a><small class="mr">${hl(o.vm,terms)}</small></div>${o.sp ? `<div class="note">${hl(o.sp,terms)}</div>` : ""}${o.ub ? `<div class="upd">✎ Updated by ${esc(o.ub)} · ${esc(o.ua)}</div>` : ""}</div></td>
+        <td data-l="Village"><div><div class="vname"><a class="vlink" href="${STOP_URL}${o.id}">${o.v ? hl(o.v,terms) : '(not named)'}</a><small class="mr">${hl(o.vm,terms)}</small></div>${o.sp ? `<div class="note">${hl(o.sp,terms)}</div>` : ""}${o.ub ? `<div class="upd">✎ Updated by ${esc(o.ub)} · ${esc(o.ua)}</div>` : ""}${o.pm ? `<div class="upd">📷 ${o.pm} photo/video</div>` : ""}</div></td>
         <td class="km" data-l="Km">${esc(o.d)}</td>
         <td class="km" data-l="Total km">${esc(o.cum)}</td>
         <td data-l="Stay">${cell(o.acc,terms)}</td>

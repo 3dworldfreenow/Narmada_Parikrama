@@ -4,31 +4,128 @@
 <main class="wrap" style="padding:0 20px 60px">
   <section class="card panel">
     <p class="meta"><a class="vlink" href="{{ url_for('stop_detail', stop_id=stop.id) }}">← Back to {{ stop.village or 'stop' }}</a></p>
-    <h1>Suggest an update: {{ stop.village or '(not named)' }}</h1>
-    <p class="meta">Change only what you know is different now. {% if user.role in ('super','admin') %}As a {{ 'super user' if user.role=='super' else 'admin' }}, your changes go live straight away.{% else %}The admin will check your update before it goes live.{% endif %}</p>
-    <form method="post" class="form" style="max-width:none">
+    <h1>Update from {{ stop.village or 'this stop' }}</h1>
+    <p class="meta">Change only what you can see is different now. You can also add photos, a short video, or a YouTube link.
+      {% if user.role in ('super','admin') %}As a {{ 'super user' if user.role=='super' else 'admin' }}, your update goes live straight away.{% else %}The admin will check your update before it goes live.{% endif %}</p>
+
+    <form method="post" enctype="multipart/form-data" class="form" style="max-width:none" id="editform">
       <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <input type="hidden" name="lat" id="lat" value="{{ form.get('lat','') }}">
+      <input type="hidden" name="lng" id="lng" value="{{ form.get('lng','') }}">
+      <input type="hidden" name="accuracy" id="accuracy" value="{{ form.get('accuracy','') }}">
+      <input type="hidden" name="video_duration" id="video_duration">
+
+      {% set gps_needed = REQUIRE_GPS and user.role != 'admin' %}
+      <div class="card gpsbox" id="gpsbox">
+        <b>📍 Your location</b>
+        <p class="meta" id="gpsmsg" style="margin:6px 0">
+          {% if gps_needed %}You must be at {{ stop.village or 'this stop' }} to send an update{% if stop.lat is not none %} (within {{ GPS_RADIUS_KM|round(1) }} km){% endif %}. Tap the button and allow location access.
+          {% else %}Location is optional for admins, but adding it helps put this stop on the map.{% endif %}
+        </p>
+        <button type="button" class="btn small alt" id="gpsbtn">Check my location</button>
+        {% if stop.lat is none %}<p class="meta" style="margin:8px 0 0">This stop is not on the map yet. Your location will be saved as its position once your update is approved.</p>{% endif %}
+      </div>
+
+      <h2 style="margin-top:22px;font-size:19px">Photos, video and links</h2>
+      <div class="grid2">
+        <div>
+          <label for="photos">Photos <span class="hint">(up to {{ MAX_PHOTOS }}, max {{ MAX_PHOTO_MB }} MB each)</span></label>
+          <input type="file" id="photos" name="photos" accept="image/*" multiple>
+          <div class="previews" id="photoprev"></div>
+        </div>
+        <div>
+          <label for="video">Short video <span class="hint">(1 video, max {{ MAX_VIDEO_SECONDS }} seconds, {{ MAX_VIDEO_MB }} MB)</span></label>
+          <input type="file" id="video" name="video" accept="video/*">
+          <p class="meta" id="videomsg"></p>
+        </div>
+      </div>
+      <label>YouTube or other links <span class="hint">(optional, up to {{ MAX_LINKS }})</span></label>
+      {% for i in range(MAX_LINKS) %}<input type="text" name="links" placeholder="https://youtube.com/watch?v=…" style="margin-bottom:6px">{% endfor %}
+
+      <h2 style="margin-top:22px;font-size:19px">Details</h2>
       <div class="grid2">
       {% for name, label, kind in fields %}
+        {% set val = form.get(name, stop[name] or '') if form else (stop[name] or '') %}
         <div>
         <label for="{{ name }}">{{ label }}</label>
         {% if kind == 'textarea' %}
-          <textarea id="{{ name }}" name="{{ name }}">{{ stop[name] or '' }}</textarea>
+          <textarea id="{{ name }}" name="{{ name }}">{{ val }}</textarea>
         {% elif kind == 'yesno' %}
           <select id="{{ name }}" name="{{ name }}">
-            {% for opt in ['Yes','No'] %}<option {% if stop[name]==opt %}selected{% endif %}>{{ opt }}</option>{% endfor %}
-            {% if stop[name] not in ['Yes','No'] %}<option selected value="{{ stop[name] or '' }}">{{ stop[name] or '(blank)' }}</option>{% endif %}
+            {% for opt in ['Yes','No'] %}<option {% if val==opt %}selected{% endif %}>{{ opt }}</option>{% endfor %}
+            {% if val not in ['Yes','No'] %}<option selected value="{{ val }}">{{ val or '(blank)' }}</option>{% endif %}
           </select>
         {% else %}
-          <input type="text" id="{{ name }}" name="{{ name }}" value="{{ stop[name] or '' }}">
+          <input type="text" id="{{ name }}" name="{{ name }}" value="{{ val }}">
         {% endif %}
         </div>
       {% endfor %}
       </div>
-      <label for="note">How do you know? <span class="hint">(optional – e.g. “I stayed here in Dec 2026”)</span></label>
-      <textarea id="note" name="note"></textarea>
-      <p style="margin-top:18px"><button class="btn">{% if user.role in ('super','admin') %}Publish update{% else %}Send for approval{% endif %}</button></p>
+      <label for="note">How do you know? <span class="hint">(optional – e.g. “I stayed here on 5 Dec 2026”)</span></label>
+      <textarea id="note" name="note">{{ form.get('note','') }}</textarea>
+      <p style="margin-top:18px">
+        <button class="btn" id="submitbtn" {% if gps_needed %}disabled{% endif %}>{% if user.role in ('super','admin') %}Publish update{% else %}Send for approval{% endif %}</button>
+        {% if gps_needed %}<span class="meta" id="submithint"> Check your location first.</span>{% endif %}
+      </p>
     </form>
   </section>
 </main>
+<script>
+(function(){
+  const gpsNeeded = {{ 'true' if gps_needed else 'false' }};
+  const stopLat = {{ stop.lat if stop.lat is not none else 'null' }}, stopLng = {{ stop.lng if stop.lng is not none else 'null' }};
+  const radius = {{ GPS_RADIUS_KM }}, maxVid = {{ MAX_VIDEO_SECONDS }}, maxPhotos = {{ MAX_PHOTOS }};
+  const $ = id => document.getElementById(id);
+  const box = $("gpsbox"), msg = $("gpsmsg"), btn = $("submitbtn");
+  let gpsOk = !gpsNeeded, videoOk = true;
+  const refresh = () => { btn.disabled = !(gpsOk && videoOk); const h = $("submithint"); if (h) h.style.display = gpsOk ? "none" : ""; };
+  function km(a,b,c,d){const R=6371,r=x=>x*Math.PI/180,dp=r(c-a),dl=r(d-b);
+    const h=Math.sin(dp/2)**2+Math.cos(r(a))*Math.cos(r(c))*Math.sin(dl/2)**2;return 2*R*Math.asin(Math.sqrt(h));}
+  $("gpsbtn").addEventListener("click", () => {
+    if (!navigator.geolocation){ msg.textContent = "This browser cannot share location. Please use Chrome or Safari on your phone."; return; }
+    msg.textContent = "Finding you… (this can take up to 30 seconds outdoors)";
+    navigator.geolocation.getCurrentPosition(p => {
+      const {latitude:la, longitude:lo, accuracy:ac} = p.coords;
+      $("lat").value = la; $("lng").value = lo; $("accuracy").value = ac;
+      let text = `Found you (accuracy about ${Math.round(ac)} m).`, ok = true;
+      if (ac > {{ GPS_MAX_ACCURACY_M }}) { text += " Signal is weak – step outside and try again."; ok = false; }
+      if (stopLat !== null){
+        const d = km(la, lo, stopLat, stopLng);
+        text += ` You are ${d.toFixed(1)} km from this stop.`;
+        if (d > radius){ text += ` You need to be within ${radius} km to update it.`; ok = false; }
+      }
+      msg.textContent = text;
+      box.classList.toggle("good", ok); box.classList.toggle("bad", !ok);
+      gpsOk = ok || !gpsNeeded; refresh();
+    }, err => {
+      msg.textContent = err.code === 1
+        ? "Location permission was blocked. Allow location for this site in your browser settings, then tap the button again."
+        : "Could not get your location. Turn on GPS / location and try again.";
+      box.classList.add("bad"); gpsOk = !gpsNeeded; refresh();
+    }, {enableHighAccuracy:true, timeout:30000, maximumAge:60000});
+  });
+  if ($("lat").value) { gpsOk = true; msg.textContent = "Location already captured. Tap the button to check again."; }
+  $("photos").addEventListener("change", e => {
+    const files = [...e.target.files], prev = $("photoprev"); prev.innerHTML = "";
+    if (files.length > maxPhotos) { alertMsg(`Please choose at most ${maxPhotos} photos.`); e.target.value = ""; return; }
+    files.forEach(f => { const im = document.createElement("img"); im.src = URL.createObjectURL(f); prev.appendChild(im); });
+  });
+  function alertMsg(t){ $("videomsg").textContent = t; }
+  $("video").addEventListener("change", e => {
+    const f = e.target.files[0]; videoOk = true; $("videomsg").textContent = ""; $("video_duration").value = "";
+    if (!f) { refresh(); return; }
+    if (f.size > {{ MAX_VIDEO_MB }} * 1024 * 1024) { $("videomsg").textContent = "This video is too big. Please record a shorter clip."; videoOk = false; refresh(); return; }
+    const v = document.createElement("video"); v.preload = "metadata";
+    v.onloadedmetadata = () => { URL.revokeObjectURL(v.src);
+      $("video_duration").value = v.duration;
+      if (v.duration > maxVid + 1){ $("videomsg").textContent = `This video is ${Math.round(v.duration)} seconds. Please keep it to ${maxVid} seconds or less.`; videoOk = false; }
+      else { $("videomsg").textContent = `Video OK (${Math.round(v.duration)} s).`; }
+      refresh(); };
+    v.onerror = () => refresh();
+    v.src = URL.createObjectURL(f);
+  });
+  $("editform").addEventListener("submit", () => { btn.disabled = true; btn.textContent = "Uploading… please wait"; });
+  refresh();
+})();
+</script>
 {% endblock %}
