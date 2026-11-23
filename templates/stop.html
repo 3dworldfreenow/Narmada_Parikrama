@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}{{ stop.village or 'Stop' }} – Narmada Parikrama{% endblock %}
+{% block body %}
+<main class="wrap" style="padding:0 20px 60px">
+  <section class="card panel">
+    <p class="meta"><a class="vlink" href="{{ url_for('index') }}">← All stops</a> · {{ STAGES[stop.stage].name }} · {{ STAGES[stop.stage].bank }} · No. {{ stop.serial or '—' }}</p>
+    <h1>{{ stop.village or '(not named)' }} <span class="mr meta" style="font-size:18px">{{ stop.village_mr }}</span></h1>
+    {% if stop.updated_by_name %}<p class="upd" style="font-size:14px">✎ Last updated by <b>{{ stop.updated_by_name }}</b> · {{ stop.updated_at }}</p>{% endif %}
+    <dl class="kv">
+      {% for name, label, kind in fields %}{% if name not in ('village','village_mr') %}
+      <dt>{{ label }}</dt><dd>{{ stop[name] if stop[name] and stop[name] not in ('No','') else '—' }}</dd>
+      {% endif %}{% endfor %}
+    </dl>
+    <p style="margin-top:20px">
+      {% if user %}<a class="btn" href="{{ url_for('edit_stop', stop_id=stop.id) }}">Suggest an update</a>
+      {% else %}<a class="btn" href="{{ url_for('login', next=url_for('edit_stop', stop_id=stop.id)) }}">Log in to suggest an update</a>{% endif %}
+    </p>
+  </section>
+
+  {% if mine %}
+  <section class="card panel">
+    <h2>Your updates waiting for approval</h2>
+    {% for e in mine %}{% include "_changes.html" %}{% endfor %}
+  </section>
+  {% endif %}
+
+  <section class="card panel">
+    <h2>Update history</h2>
+    {% for e in history %}
+      <p><b>{{ e.user_name }}</b> <span class="meta">· {{ e.reviewed_at or e.created_at }}</span></p>
+      {% include "_changes.html" %}
+    {% else %}
+      <p class="meta">No updates yet. The details above are from the original 2014 guide.</p>
+    {% endfor %}
+  </section>
+</main>
+{% endblock %}

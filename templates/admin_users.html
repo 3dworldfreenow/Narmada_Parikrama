@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Users – Narmada Parikrama{% endblock %}
+{% block body %}
+<main class="wrap" style="padding:0 20px 60px">
+  <section class="card panel">
+    <h1>Users ({{ users|length }})</h1>
+    <p class="meta"><b>User</b>: updates need your approval. <b>Super user</b>: updates go live at once. <b>Admin</b>: can approve updates and manage users.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Name</th><th>Email</th><th>Mobile</th><th>Joined</th><th>Updates</th><th>Role</th></tr></thead>
+      <tbody>
+      {% for u in users %}
+      <tr>
+        <td data-l="Name">{{ u.name }}</td><td data-l="Email">{{ u.email }}</td><td data-l="Mobile">{{ u.mobile }}</td>
+        <td data-l="Joined" class="meta">{{ u.created_at }}</td>
+        <td data-l="Updates">{{ u.approved }} approved / {{ u.total }}</td>
+        <td data-l="Role">
+          <form method="post" action="{{ url_for('admin_set_role', user_id=u.id) }}" class="row" style="gap:6px">
+            <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+            <select name="role" style="width:auto">
+              {% for r, lbl in [('user','User'),('super','Super user'),('admin','Admin')] %}<option value="{{ r }}" {% if u.role==r %}selected{% endif %}>{{ lbl }}</option>{% endfor %}
+            </select>
+            <button class="btn small alt">Save</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+  </section>
+</main>
+{% endblock %}

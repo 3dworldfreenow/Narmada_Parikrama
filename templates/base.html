@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Narmada Parikrama – Village-by-Village Route Guide{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600&family=Noto+Sans+Devanagari:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<nav class="top"><div class="wrap">
+  <a class="brand" href="{{ url_for('index') }}">नर्मदे हर · Parikrama Guide</a>
+  <span class="sp"></span>
+  {% if user %}
+    <a href="{{ url_for('my_updates') }}">My updates</a>
+    {% if user.role == 'admin' %}
+      <a href="{{ url_for('admin_queue') }}">Approvals{% if pending_count %}<span class="pill">{{ pending_count }}</span>{% endif %}</a>
+      <a href="{{ url_for('admin_users') }}">Users</a>
+    {% endif %}
+    <span class="meta" style="color:#cfe">{{ user.name }}{% if user.role == 'super' %} · super user{% elif user.role == 'admin' %} · admin{% endif %}</span>
+    <form method="post" action="{{ url_for('logout') }}"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="linkbtn">Log out</button></form>
+  {% else %}
+    <a href="{{ url_for('login') }}">Log in</a>
+    <a href="{{ url_for('register') }}">Create account</a>
+  {% endif %}
+</div></nav>
+{% with msgs = get_flashed_messages(with_categories=true) %}{% if msgs %}
+<div class="flashes">{% for cat, m in msgs %}<div class="flash {{ cat }}">{{ m }}</div>{% endfor %}</div>
+{% endif %}{% endwith %}
+{% block body %}{% endblock %}
+</body>
+</html>

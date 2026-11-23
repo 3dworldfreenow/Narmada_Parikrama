@@ -1,0 +1,7 @@
+<table class="diff">
+  {% for f, ch in e.changes.items() %}
+  <tr><td class="meta" style="width:32%">{{ labels.get(f, f) }}</td>
+      <td><span class="old">{{ ch[0] or '(empty)' }}</span> → <span class="new">{{ ch[1] or '(empty)' }}</span></td></tr>
+  {% endfor %}
+</table>
+{% if e.note %}<p class="meta">Note: {{ e.note }}</p>{% endif %}

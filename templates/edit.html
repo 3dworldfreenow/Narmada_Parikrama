@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Update {{ stop.village }} – Narmada Parikrama{% endblock %}
+{% block body %}
+<main class="wrap" style="padding:0 20px 60px">
+  <section class="card panel">
+    <p class="meta"><a class="vlink" href="{{ url_for('stop_detail', stop_id=stop.id) }}">← Back to {{ stop.village or 'stop' }}</a></p>
+    <h1>Suggest an update: {{ stop.village or '(not named)' }}</h1>
+    <p class="meta">Change only what you know is different now. {% if user.role in ('super','admin') %}As a {{ 'super user' if user.role=='super' else 'admin' }}, your changes go live straight away.{% else %}The admin will check your update before it goes live.{% endif %}</p>
+    <form method="post" class="form" style="max-width:none">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <div class="grid2">
+      {% for name, label, kind in fields %}
+        <div>
+        <label for="{{ name }}">{{ label }}</label>
+        {% if kind == 'textarea' %}
+          <textarea id="{{ name }}" name="{{ name }}">{{ stop[name] or '' }}</textarea>
+        {% elif kind == 'yesno' %}
+          <select id="{{ name }}" name="{{ name }}">
+            {% for opt in ['Yes','No'] %}<option {% if stop[name]==opt %}selected{% endif %}>{{ opt }}</option>{% endfor %}
+            {% if stop[name] not in ['Yes','No'] %}<option selected value="{{ stop[name] or '' }}">{{ stop[name] or '(blank)' }}</option>{% endif %}
+          </select>
+        {% else %}
+          <input type="text" id="{{ name }}" name="{{ name }}" value="{{ stop[name] or '' }}">
+        {% endif %}
+        </div>
+      {% endfor %}
+      </div>
+      <label for="note">How do you know? <span class="hint">(optional – e.g. “I stayed here in Dec 2026”)</span></label>
+      <textarea id="note" name="note"></textarea>
+      <p style="margin-top:18px"><button class="btn">{% if user.role in ('super','admin') %}Publish update{% else %}Send for approval{% endif %}</button></p>
+    </form>
+  </section>
+</main>
+{% endblock %}

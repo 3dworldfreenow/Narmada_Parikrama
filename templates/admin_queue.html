@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Approvals – Narmada Parikrama{% endblock %}
+{% block body %}
+<main class="wrap" style="padding:0 20px 60px">
+  <section class="card panel">
+    <h1>Updates waiting for approval ({{ edits|length }})</h1>
+    {% for e in edits %}
+    <div class="card" style="padding:14px 16px;margin:14px 0">
+      <p style="margin:0 0 4px"><a class="vlink" href="{{ url_for('stop_detail', stop_id=e.stop_id) }}"><b>{{ e.village or 'Stop' }}</b></a> <span class="meta">· Stage {{ e.stage }}, No. {{ e.serial }} · sent {{ e.created_at }}</span></p>
+      <p class="meta" style="margin:0">By <b>{{ e.user_name }}</b> · {{ e.email }} · {{ e.mobile }}</p>
+      {% include "_changes.html" %}
+      <form method="post" action="{{ url_for('admin_review', edit_id=e.id) }}" class="row">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <input type="text" name="review_note" placeholder="Note to user (optional)" style="flex:1 1 240px">
+        <label class="chip"><input type="checkbox" name="make_super" value="1"> Also make {{ e.user_name }} a super user</label>
+        <button class="btn small" name="action" value="approve">Approve</button>
+        <button class="btn small warn" name="action" value="reject">Reject</button>
+      </form>
+    </div>
+    {% else %}
+      <p class="meta">Nothing to review. 🙏</p>
+    {% endfor %}
+  </section>
+</main>
+{% endblock %}

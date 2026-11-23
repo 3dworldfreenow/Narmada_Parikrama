@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}My updates – Narmada Parikrama{% endblock %}
+{% block body %}
+<main class="wrap" style="padding:0 20px 60px">
+  <section class="card panel">
+    <h1>My updates</h1>
+    {% for e in edits %}
+      <p><a class="vlink" href="{{ url_for('stop_detail', stop_id=e.stop_id) }}"><b>{{ e.village or 'Stop' }}</b></a> <span class="meta">Stage {{ e.stage }} · {{ e.created_at }}</span> <span class="status {{ e.status }}">{{ e.status }}</span></p>
+      {% include "_changes.html" %}
+      {% if e.review_note %}<p class="meta">Admin note: {{ e.review_note }}</p>{% endif %}
+    {% else %}
+      <p class="meta">You haven't suggested any updates yet. Open any village from the <a href="{{ url_for('index') }}">list</a> to start.</p>
+    {% endfor %}
+  </section>
+</main>
+{% endblock %}
