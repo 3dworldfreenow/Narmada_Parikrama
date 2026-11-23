@@ -133,3 +133,4 @@ input[type=file]{font:inherit;font-size:14px;max-width:100%}
 .kv{grid-template-columns:minmax(120px,max-content) minmax(0,1fr)}
 .kv dd{overflow-wrap:anywhere}
 @media (max-width:520px){.kv{grid-template-columns:1fr;gap:0}.kv dt{margin-top:10px;font-size:12.5px}}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin:0 3px 0 8px;vertical-align:middle}

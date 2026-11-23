@@ -7,10 +7,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600&family=Noto+Sans+Devanagari:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+{% block head %}{% endblock %}
 </head>
 <body>
 <nav class="top"><div class="wrap">
   <a class="brand" href="{{ url_for('index') }}">नर्मदे हर · Parikrama Guide</a>
+  <a href="{{ url_for('index') }}">All stops</a>
+  <a href="{{ url_for('map_view') }}">Map</a>
   <span class="sp"></span>
   {% if user %}
     <a href="{{ url_for('my_updates') }}">My updates</a>

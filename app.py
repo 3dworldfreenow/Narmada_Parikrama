@@ -30,6 +30,8 @@ UPLOAD_DIR = os.environ.get("UPLOAD_DIR", os.path.join(BASE_DIR, "instance", "up
 # How close (km) a user must be to a stop to update it. Villages along the
 # river are a few km apart, so the default is generous.
 GPS_RADIUS_KM = float(os.environ.get("GPS_RADIUS_KM", "3"))
+# Locations found from OpenStreetMap by name are approximate, so allow more room.
+OSM_RADIUS_KM = float(os.environ.get("OSM_RADIUS_KM", "5"))
 GPS_MAX_ACCURACY_M = float(os.environ.get("GPS_MAX_ACCURACY_M", "1000"))
 REQUIRE_GPS = os.environ.get("REQUIRE_GPS", "1") != "0"
 MAX_PHOTOS = 6
@@ -152,7 +154,7 @@ def init_db():
     db.executescript(SCHEMA)
     # Columns added after the first release (safe on old databases).
     for table, col, typ in [("stops", "lat", "REAL"), ("stops", "lng", "REAL"),
-                            ("stops", "located_by", "INTEGER"),
+                            ("stops", "located_by", "INTEGER"), ("stops", "loc_src", "TEXT"),
                             ("edits", "lat", "REAL"), ("edits", "lng", "REAL"),
                             ("edits", "accuracy", "REAL"), ("edits", "distance_km", "REAL")]:
         cols = [r[1] for r in db.execute(f"PRAGMA table_info({table})")]
@@ -169,6 +171,8 @@ def init_db():
             [(r["st"], str(r["n"]), r["v"], r["vm"], r["d"], r["cum"], r["sp"], r["acc"],
               r["te"], r["ti"], r["sa"], r["gh"], r["br"], r["rt"], r["fd"], r["sd"], r["h"])
              for r in rows])
+        db.commit()
+        _apply_osm_locations(db, rows)
     db.commit()
     db.close()
 
@@ -178,6 +182,30 @@ def init_db_command():
     """Create tables and load the seed data (safe to run twice)."""
     init_db()
     print("Database ready:", DATABASE)
+
+
+def _apply_osm_locations(db, rows):
+    """Copy lat/lng found from OpenStreetMap (data/stops.json) into the stops
+    table. Locations confirmed by a pilgrim's visit are never overwritten."""
+    n = 0
+    for i, r in enumerate(rows, start=1):
+        if r.get("lat") is None:
+            continue
+        cur = db.execute("""UPDATE stops SET lat=?, lng=?, loc_src='osm'
+                            WHERE id=? AND stage=? AND (loc_src IS NULL OR loc_src='osm')""",
+                         (r["lat"], r["lng"], i, r["st"]))
+        n += cur.rowcount
+    return n
+
+
+@app.cli.command("apply-locations")
+def apply_locations_command():
+    """Load OpenStreetMap locations from data/stops.json into the database."""
+    db = sqlite3.connect(DATABASE)
+    with open(SEED_FILE, encoding="utf-8") as fh:
+        n = _apply_osm_locations(db, json.load(fh))
+    db.commit()
+    print(f"{n} stops now have an OpenStreetMap location.")
 
 
 @app.cli.command("make-admin")
@@ -205,7 +233,7 @@ def inject_globals():
     if user and user["role"] == "admin":
         pending = get_db().execute("SELECT COUNT(*) FROM edits WHERE status='pending'").fetchone()[0]
     return {"user": user, "pending_count": pending, "csrf_token": csrf_token, "STAGES": STAGES,
-            "labels": FIELD_LABELS, "GPS_RADIUS_KM": GPS_RADIUS_KM, "GPS_MAX_ACCURACY_M": GPS_MAX_ACCURACY_M, "REQUIRE_GPS": REQUIRE_GPS,
+            "labels": FIELD_LABELS, "GPS_RADIUS_KM": GPS_RADIUS_KM, "OSM_RADIUS_KM": OSM_RADIUS_KM, "stop_radius": stop_radius, "GPS_MAX_ACCURACY_M": GPS_MAX_ACCURACY_M, "REQUIRE_GPS": REQUIRE_GPS,
             "MAX_PHOTOS": MAX_PHOTOS, "MAX_PHOTO_MB": MAX_PHOTO_MB, "MAX_VIDEO_MB": MAX_VIDEO_MB,
             "MAX_VIDEO_SECONDS": MAX_VIDEO_SECONDS, "MAX_LINKS": MAX_LINKS, "youtube_id": youtube_id}
 
@@ -248,6 +276,10 @@ MOBILE_RE = re.compile(r"^(\+?91[\s-]?)?[6-9]\d{9}$")
 
 
 # ---------------------------------------------------------------- location & media helpers
+def stop_radius(stop):
+    return GPS_RADIUS_KM if stop["loc_src"] == "visit" else OSM_RADIUS_KM
+
+
 def haversine_km(lat1, lng1, lat2, lng2):
     r = 6371.0
     p1, p2 = math.radians(lat1), math.radians(lat2)
@@ -374,13 +406,23 @@ def index():
         "ti": r["tirth"], "sa": r["sangam"], "gh": r["ghat"], "br": r["bridge"], "rt": r["path"],
         "fd": r["food"], "sd": r["rations"], "h": r["halt"],
         "ub": r["updated_by_name"], "ua": r["updated_at"],
-        "loc": r["lat"] is not None, "pm": photo_counts.get(r["id"], 0),
+        "lat": r["lat"], "lng": r["lng"], "ls": r["loc_src"], "pm": photo_counts.get(r["id"], 0),
     } for r in rows]
     recent = db.execute(
         """SELECT e.*, u.name AS user_name, s.village, s.stage FROM edits e
            JOIN users u ON u.id=e.user_id JOIN stops s ON s.id=e.stop_id
            WHERE e.status='approved' ORDER BY e.reviewed_at DESC, e.id DESC LIMIT 8""").fetchall()
     return render_template("index.html", data=data, recent=recent)
+
+
+@app.route("/map")
+def map_view():
+    rows = get_db().execute(
+        "SELECT id, stage, serial, village, lat, lng, loc_src, food, rations FROM stops WHERE lat IS NOT NULL ORDER BY stage, id").fetchall()
+    total = get_db().execute("SELECT COUNT(*) FROM stops").fetchone()[0]
+    pts = [{"id": r["id"], "st": r["stage"], "n": r["serial"], "v": r["village"], "lat": r["lat"], "lng": r["lng"],
+            "src": r["loc_src"], "fd": r["food"], "sd": r["rations"]} for r in rows]
+    return render_template("map.html", pts=pts, total=total)
 
 
 @app.route("/stop/<int:stop_id>")
@@ -532,10 +574,13 @@ def edit_stop(stop_id):
             if gps_needed and acc is not None and acc > GPS_MAX_ACCURACY_M:
                 errors.append(f"Your GPS signal is too weak (about {acc:.0f} m). Step outside or wait a moment, then try again.")
             if stop["lat"] is not None:
+                radius = stop_radius(stop)
                 distance = haversine_km(lat, lng, stop["lat"], stop["lng"])
-                if gps_needed and distance > GPS_RADIUS_KM:
+                # Only a location confirmed by a visit is strict. An approximate
+                # OpenStreetMap point may be wrong, so the admin decides instead.
+                if gps_needed and stop["loc_src"] == "visit" and distance > radius:
                     errors.append(f"You seem to be {distance:.1f} km away from {stop['village'] or 'this stop'}. "
-                                  f"Updates can only be sent from within {GPS_RADIUS_KM:g} km of the place.")
+                                  f"Updates can only be sent from within {radius:g} km of the place.")
 
         # --- photos
         photos = [f for f in request.files.getlist("photos") if f and f.filename]
@@ -624,7 +669,10 @@ def apply_edit(db, edit):
     db.execute(f"UPDATE stops SET {', '.join(sets + ['updated_by=?', 'updated_at=?'])} WHERE id=?",
                vals + [edit["user_id"], now(), edit["stop_id"]])
     if edit["lat"] is not None and (edit["accuracy"] is None or edit["accuracy"] <= GPS_MAX_ACCURACY_M):
-        db.execute("UPDATE stops SET lat=?, lng=?, located_by=? WHERE id=? AND lat IS NULL",
+        # First verified visit fixes the position: replaces "no location" or an
+        # approximate OpenStreetMap one (the visit was already within range of it).
+        db.execute("""UPDATE stops SET lat=?, lng=?, located_by=?, loc_src='visit'
+                      WHERE id=? AND (lat IS NULL OR loc_src IS NULL OR loc_src='osm')""",
                    (edit["lat"], edit["lng"], edit["user_id"], edit["stop_id"]))
 
 
@@ -634,7 +682,7 @@ def apply_edit(db, edit):
 def admin_queue():
     rows = get_db().execute(
         """SELECT e.*, u.name AS user_name, u.email, u.mobile, u.role, s.village, s.stage, s.serial,
-                  s.lat AS stop_lat, s.lng AS stop_lng
+                  s.lat AS stop_lat, s.lng AS stop_lng, s.loc_src
            FROM edits e JOIN users u ON u.id=e.user_id JOIN stops s ON s.id=e.stop_id
            WHERE e.status='pending' ORDER BY e.id""").fetchall()
     media = media_for("edit_id IN (SELECT id FROM edits WHERE status='pending')", [])
@@ -671,7 +719,7 @@ def admin_review(edit_id):
 @admin_required
 def admin_clear_location(stop_id):
     db = get_db()
-    db.execute("UPDATE stops SET lat=NULL, lng=NULL, located_by=NULL WHERE id=?", (stop_id,))
+    db.execute("UPDATE stops SET lat=NULL, lng=NULL, located_by=NULL, loc_src=NULL WHERE id=?", (stop_id,))
     db.commit()
     flash("Map location cleared. The next approved update with GPS will set it again.", "ok")
     return redirect(url_for("stop_detail", stop_id=stop_id))

@@ -19,11 +19,12 @@
       <div class="card gpsbox" id="gpsbox">
         <b>📍 Your location</b>
         <p class="meta" id="gpsmsg" style="margin:6px 0">
-          {% if gps_needed %}You must be at {{ stop.village or 'this stop' }} to send an update{% if stop.lat is not none %} (within {{ GPS_RADIUS_KM|round(1) }} km){% endif %}. Tap the button and allow location access.
+          {% if gps_needed %}You must be at {{ stop.village or 'this stop' }} to send an update{% if stop.loc_src == 'visit' %} (within {{ stop_radius(stop)|round(1) }} km){% endif %}. Tap the button and allow location access.
           {% else %}Location is optional for admins, but adding it helps put this stop on the map.{% endif %}
         </p>
         <button type="button" class="btn small alt" id="gpsbtn">Check my location</button>
-        {% if stop.lat is none %}<p class="meta" style="margin:8px 0 0">This stop is not on the map yet. Your location will be saved as its position once your update is approved.</p>{% endif %}
+        {% if stop.lat is none %}<p class="meta" style="margin:8px 0 0">This stop is not on the map yet. Your location will be saved as its position once your update is approved.</p>
+        {% elif stop.loc_src != 'visit' %}<p class="meta" style="margin:8px 0 0">This stop's map point is approximate. Once your update is approved, your location will become its confirmed position.</p>{% endif %}
       </div>
 
       <h2 style="margin-top:22px;font-size:19px">Photos, video and links</h2>
@@ -73,8 +74,9 @@
 <script>
 (function(){
   const gpsNeeded = {{ 'true' if gps_needed else 'false' }};
+  const strict = {{ 'true' if stop.loc_src == 'visit' else 'false' }};
   const stopLat = {{ stop.lat if stop.lat is not none else 'null' }}, stopLng = {{ stop.lng if stop.lng is not none else 'null' }};
-  const radius = {{ GPS_RADIUS_KM }}, maxVid = {{ MAX_VIDEO_SECONDS }}, maxPhotos = {{ MAX_PHOTOS }};
+  const radius = {{ stop_radius(stop) }}, maxVid = {{ MAX_VIDEO_SECONDS }}, maxPhotos = {{ MAX_PHOTOS }};
   const $ = id => document.getElementById(id);
   const box = $("gpsbox"), msg = $("gpsmsg"), btn = $("submitbtn");
   let gpsOk = !gpsNeeded, videoOk = true;
@@ -91,8 +93,11 @@
       if (ac > {{ GPS_MAX_ACCURACY_M }}) { text += " Signal is weak – step outside and try again."; ok = false; }
       if (stopLat !== null){
         const d = km(la, lo, stopLat, stopLng);
-        text += ` You are ${d.toFixed(1)} km from this stop.`;
-        if (d > radius){ text += ` You need to be within ${radius} km to update it.`; ok = false; }
+        text += ` You are ${d.toFixed(1)} km from this stop's map point.`;
+        if (d > radius){
+          if (strict) { text += ` You need to be within ${radius} km to update it.`; ok = false; }
+          else { text += " That map point is only approximate, so you can still send your update – the admin will check it."; }
+        }
       }
       msg.textContent = text;
       box.classList.toggle("good", ok); box.classList.toggle("bad", !ok);

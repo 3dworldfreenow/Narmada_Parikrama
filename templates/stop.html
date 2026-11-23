@@ -5,9 +5,22 @@
   <section class="card panel">
     <p class="meta"><a class="vlink" href="{{ url_for('index') }}">← All stops</a> · {{ STAGES[stop.stage].name }} · {{ STAGES[stop.stage].bank }} · No. {{ stop.serial or '—' }}</p>
     <h1>{{ stop.village or '(not named)' }} <span class="mr meta" style="font-size:18px">{{ stop.village_mr }}</span></h1>
-    <p class="meta">{% if stop.lat is not none %}📍 <a href="https://www.google.com/maps?q={{ stop.lat }},{{ stop.lng }}" target="_blank" rel="noopener">Open on Google Maps</a> <span class="meta">(location from a pilgrim's verified visit)</span>
+    <p class="meta">{% if stop.lat is not none %}📍 <a href="https://www.google.com/maps?q={{ stop.lat }},{{ stop.lng }}" target="_blank" rel="noopener">Open in Google Maps</a>
+      · {% if stop.loc_src == 'visit' %}location confirmed by a pilgrim's visit{% else %}approximate location, found by name on OpenStreetMap{% endif %}
       {% if user and user.role == 'admin' %}<form method="post" action="{{ url_for('admin_clear_location', stop_id=stop.id) }}" style="display:inline"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"> · <button class="linkbtn" style="color:var(--saffron)">Clear location</button></form>{% endif %}
       {% else %}📍 Not on the map yet – the first approved update sent from here will add it.{% endif %}</p>
+    {% if stop.lat is not none %}
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <div id="minimap" style="height:240px;border-radius:12px;margin:8px 0 16px"></div>
+    <script>
+      const mm = L.map("minimap", {scrollWheelZoom: false}).setView([{{ stop.lat }}, {{ stop.lng }}], 13);
+      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 18, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'}).addTo(mm);
+      L.marker([{{ stop.lat }}, {{ stop.lng }}]).addTo(mm);
+      L.circle([{{ stop.lat }}, {{ stop.lng }}], {radius: {{ stop_radius(stop) * 1000 }}, color: "#0f6e77", weight: 1, fillOpacity: .06}).addTo(mm);
+    </script>
+    <p class="meta" style="margin-top:-8px">The circle shows the area ({{ stop_radius(stop)|round(1) }} km) from where updates can be sent.</p>
+    {% endif %}
     {% if stop.updated_by_name %}<p class="upd" style="font-size:14px">✎ Last updated by <b>{{ stop.updated_by_name }}</b> · {{ stop.updated_at }}</p>{% endif %}
     <dl class="kv">
       {% for name, label, kind in fields %}{% if name not in ('village','village_mr') %}

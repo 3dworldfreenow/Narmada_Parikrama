@@ -11,7 +11,10 @@
       <p class="meta" style="margin:6px 0">
         {% if e.lat is not none %}📍 Sent from <a href="https://www.google.com/maps?q={{ e.lat }},{{ e.lng }}" target="_blank" rel="noopener">{{ '%.5f'|format(e.lat) }}, {{ '%.5f'|format(e.lng) }}</a>
           {% if e.accuracy is not none %}(±{{ e.accuracy|round|int }} m){% endif %}
-          {% if e.distance_km is not none %} · <b>{{ '%.1f'|format(e.distance_km) }} km</b> from the stop{% elif e.stop_lat is none %} · stop not on map yet – approving will set its location here{% endif %}
+          {% if e.distance_km is not none %} · <b>{{ '%.1f'|format(e.distance_km) }} km</b> from the stop's {{ 'confirmed' if e.loc_src == 'visit' else 'approximate (OpenStreetMap)' }} point
+            {% if e.loc_src != 'visit' %}{% if e.distance_km > OSM_RADIUS_KM %}<br><span style="color:#b3412f">⚠ Far from the approximate point. Either the OpenStreetMap match was wrong, or the sender is not at this village. Check the map link.</span>{% endif %}
+            <br>Approving will set this stop's confirmed location to where this was sent from.{% endif %}
+          {% elif e.stop_lat is none %} · stop not on map yet – approving will set its location here{% endif %}
         {% else %}<span style="color:var(--saffron)">⚠ No GPS location</span>{% endif %}
       </p>
       {% if e.changes %}{% include "_changes.html" %}{% else %}{% if e.note %}<p class="meta">Note: {{ e.note }}</p>{% endif %}{% endif %}
