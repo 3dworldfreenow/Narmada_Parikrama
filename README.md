@@ -75,7 +75,7 @@ On PythonAnywhere: `cd Narmada_Parikrama && git pull`, then click **Reload**. Yo
 
 ### Read-only version (GitHub Pages)
 
-`docs/index.html` is a single-file version without accounts. To publish it, go to **Settings → Pages → Branch: main, folder: /docs**.
+`docs/index.html` is a single-file version without accounts, with a List/Map switch. Rebuild it after changing the data with `python docs_src/build.py`. To publish it, go to **Settings → Pages → Branch: main, folder: /docs**.
 
 ## Putting the villages on the map (one-time)
 
@@ -88,6 +88,8 @@ git add data && git commit -m "Add map locations" && git push
 ```
 
 Then on the server: `git pull`, then `flask --app app apply-locations`, then Reload. A new install loads the locations automatically.
+
+**Already done:** 268 of 805 stops have map locations in `data/stops.json` (searched Nov 2026; 4 clearly wrong matches removed by hand). The rest weren't found on OpenStreetMap under any spelling, so they will get locations from pilgrims' GPS visits.
 
 Matching uses both the English and Marathi names, and checks that neighbouring stops are about as far apart as the guide says. In tests with made-up data, about 9 in 10 placed pins were right. Some villages aren't in OpenStreetMap and will stay unplaced. Pilgrims' GPS visits fix both cases over time.
 
