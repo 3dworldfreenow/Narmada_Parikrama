@@ -87,6 +87,11 @@ GENERIC = r"\b(ghat|gav|gaon|gam|kalan|khurd|bujurg|bujurga|buzurg|phata|tola|sa
 
 def norm_latin(s):
     s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode().lower()
+    # common village-name endings spelled many ways
+    s = re.sub(r"(gaon|gaun|gav|gao|gam)\b", "gav", s)
+    s = re.sub(r"(pura|puram|pur)\b", "pur", s)
+    s = re.sub(r"(khedi|kheda|khera|kheri)\b", "kher", s)
+    s = re.sub(r"(wada|wadi|vada|vadi|vad)\b", "vad", s)
     s = re.sub(r"\(.*?\)", " ", s)
     s = re.sub(GENERIC, " ", s)
     s = re.sub(r"[^a-z]", "", s)
@@ -133,7 +138,7 @@ GOOD_TYPES = ("place:", "boundary:administrative", "railway:station", "railway:h
               "tourism:", "amenity:place_of_worship", "historic:", "landuse:residential")
 
 
-PRIOR_KM = 45   # how far a match may be from the stop's estimated position
+PRIOR_KM = 60   # how far a match may be from the stop's estimated position
 
 
 def candidates(stop, raw, est=None):
@@ -187,7 +192,7 @@ def choose(stops, cands):
             continue
         top = c[0]
         others = [x for x in c[1:] if haversine((x[1][0], x[1][1]), (top[1][0], top[1][1])) > 3]
-        if top[0] >= 0.92 and (not others or others[0][0] < top[0] - 0.08):
+        if top[0] >= 0.92 and (not others or others[0][0] < top[0] - 0.04):
             chosen[i] = (top[1][0], top[1][1], top[0])
 
     # drop anchors that jump wildly from their anchored neighbours (wrong same-name place)
