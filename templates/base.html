@@ -15,6 +15,7 @@
   {% if user and user.username %}<a href="{{ url_for('index') }}">← Back to map</a>{% endif %}
   <span class="sp"></span>
   {% if user and user.username %}
+    <a href="{{ url_for('timeline') }}">My timeline</a>
     <a href="{{ url_for('my_updates') }}">My updates</a>
     <a href="{{ url_for('settings') }}">Settings</a>
     {% if user.role == 'admin' %}

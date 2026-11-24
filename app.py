@@ -41,6 +41,20 @@ LOCATION_MAX_AGE_H = float(os.environ.get("LOCATION_MAX_AGE_H", "12"))  # ask fo
 # Optional: map file downloaded by deploy/download-map.sh (served from this server).
 MAP_PMTILES = os.environ.get("MAP_PMTILES", "")
 MAP_MAXZOOM = int(os.environ.get("MAP_MAXZOOM", "14"))
+# Path reports: what pilgrims can say about a road / footpath at a spot on the map.
+REPORT_KINDS = {
+    "good": "✅ Good path", "closed": "⛔ Road/path closed", "mud": "🟤 Muddy / slippery",
+    "water_high": "🌊 Flooded / water high", "bridge": "🌉 Bridge or boat problem",
+    "danger": "⚠️ Danger (animals, theft…)", "water": "💧 Drinking water here",
+    "food": "🍲 Food / chai here", "rest": "🛖 Rest place / shade", "other": "📝 Other",
+}
+REPORT_RADIUS_KM = float(os.environ.get("REPORT_RADIUS_KM", "5"))     # sender must be this close
+REPORT_DAYS = int(os.environ.get("REPORT_DAYS", "45"))                # reports fade after N days
+# Timeline: a point is saved when the user moved TIMELINE_MIN_M metres or TIMELINE_MIN_S seconds passed.
+TIMELINE_MIN_M = float(os.environ.get("TIMELINE_MIN_M", "100"))
+TIMELINE_MIN_S = float(os.environ.get("TIMELINE_MIN_S", "900"))
+TIMELINE_MAX_ACC_M = float(os.environ.get("TIMELINE_MAX_ACC_M", "250"))   # skip very rough GPS fixes
+TIMELINE_DAYS = int(os.environ.get("TIMELINE_DAYS", "400"))               # keep history this long
 MAX_PHOTOS = 6
 MAX_PHOTO_MB = 10
 MAX_VIDEO_MB = 60
@@ -133,6 +147,26 @@ CREATE TABLE IF NOT EXISTS media (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_media_stop ON media(stop_id);
+CREATE TABLE IF NOT EXISTS path_reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    lat REAL NOT NULL, lng REAL NOT NULL,       -- the spot being reported
+    kind TEXT NOT NULL,                         -- see REPORT_KINDS
+    note TEXT,
+    mode TEXT,                                  -- walk | bike | car | all
+    sender_lat REAL, sender_lng REAL, sender_acc REAL, distance_km REAL,
+    status TEXT NOT NULL DEFAULT 'pending',     -- pending | approved | rejected
+    created_at TEXT NOT NULL, created_ts REAL NOT NULL,
+    reviewed_by INTEGER, reviewed_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_reports_status ON path_reports(status);
+CREATE TABLE IF NOT EXISTS location_points (      -- each user's private journey ("timeline")
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    lat REAL NOT NULL, lng REAL NOT NULL, acc REAL,
+    ts REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_points_user_ts ON location_points(user_id, ts);
 CREATE INDEX IF NOT EXISTS idx_edits_status ON edits(status);
 CREATE INDEX IF NOT EXISTS idx_edits_stop ON edits(stop_id);
 """
@@ -173,7 +207,8 @@ def init_db():
                             ("users", "username", "TEXT"), ("users", "last_seen", "TEXT"),
                             ("users", "last_seen_ts", "REAL"), ("users", "last_lat", "REAL"),
                             ("users", "last_lng", "REAL"), ("users", "last_acc", "REAL"),
-                            ("users", "show_on_map", "INTEGER DEFAULT 1")]:
+                            ("users", "show_on_map", "INTEGER DEFAULT 1"),
+                            ("users", "save_timeline", "INTEGER DEFAULT 1")]:
         cols = [r[1] for r in db.execute(f"PRAGMA table_info({table})")]
         if col not in cols:
             db.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typ}")
@@ -312,7 +347,8 @@ def inject_globals():
     user = current_user()
     pending = 0
     if user and user["role"] == "admin":
-        pending = get_db().execute("SELECT COUNT(*) FROM edits WHERE status='pending'").fetchone()[0]
+        pending = get_db().execute("SELECT COUNT(*) FROM edits WHERE status='pending'").fetchone()[0] + \
+            get_db().execute("SELECT COUNT(*) FROM path_reports WHERE status='pending'").fetchone()[0]
     return {"user": user, "pending_count": pending, "csrf_token": csrf_token, "STAGES": STAGES,
             "labels": FIELD_LABELS, "GPS_RADIUS_KM": GPS_RADIUS_KM, "OSM_RADIUS_KM": OSM_RADIUS_KM, "stop_radius": stop_radius, "GPS_MAX_ACCURACY_M": GPS_MAX_ACCURACY_M, "REQUIRE_GPS": REQUIRE_GPS,
             "MAX_PHOTOS": MAX_PHOTOS, "MAX_PHOTO_MB": MAX_PHOTO_MB, "MAX_VIDEO_MB": MAX_VIDEO_MB,
@@ -532,7 +568,8 @@ def index():
            JOIN users u ON u.id=e.user_id JOIN stops s ON s.id=e.stop_id
            WHERE e.status='approved' ORDER BY e.reviewed_at DESC, e.id DESC LIMIT 8""").fetchall()
     local_map = bool(MAP_PMTILES and os.path.isfile(MAP_PMTILES))
-    return render_template("app.html", data=data, recent=recent, local_map=local_map, map_maxzoom=MAP_MAXZOOM)
+    return render_template("app.html", data=data, recent=recent, local_map=local_map, map_maxzoom=MAP_MAXZOOM,
+                           report_kinds=REPORT_KINDS, report_radius=REPORT_RADIUS_KM)
 
 
 @app.route("/map")
@@ -705,9 +742,114 @@ def _save_location(user, form):
     ts = datetime.now(timezone.utc).timestamp()
     get_db().execute("""UPDATE users SET last_lat=?, last_lng=?, last_acc=?, last_seen=?, last_seen_ts=?
                         WHERE id=?""", (lat, lng, acc, now(), ts, user["id"]))
+    _record_timeline(user, lat, lng, acc, ts)
     get_db().commit()
     session["loc_at"] = ts
     return True
+
+
+def _record_timeline(user, lat, lng, acc, ts):
+    if user["save_timeline"] == 0 or (acc is not None and acc > TIMELINE_MAX_ACC_M):
+        return
+    db = get_db()
+    last = db.execute("SELECT lat, lng, ts FROM location_points WHERE user_id=? ORDER BY ts DESC LIMIT 1",
+                      (user["id"],)).fetchone()
+    if last and haversine_km(lat, lng, last["lat"], last["lng"]) * 1000 < TIMELINE_MIN_M and ts - last["ts"] < TIMELINE_MIN_S:
+        return
+    db.execute("INSERT INTO location_points (user_id, lat, lng, acc, ts) VALUES (?,?,?,?,?)",
+               (user["id"], lat, lng, acc, ts))
+    if not last or int(ts) % 50 == 0:   # now and then, forget points older than TIMELINE_DAYS
+        db.execute("DELETE FROM location_points WHERE user_id=? AND ts < ?", (user["id"], ts - TIMELINE_DAYS * 86400))
+
+
+def _ist_day(ts):
+    return datetime.fromtimestamp(ts, IST).strftime("%Y-%m-%d")
+
+
+def _day_bounds(day):
+    d = datetime.strptime(day, "%Y-%m-%d").replace(tzinfo=IST)
+    return d.timestamp(), d.timestamp() + 86400
+
+
+@app.route("/timeline")
+def timeline():
+    return render_template("timeline.html")
+
+
+@app.route("/api/timeline/days")
+def api_timeline_days():
+    """The days on which I have timeline points, newest first, with distance travelled."""
+    rows = get_db().execute("SELECT lat, lng, ts FROM location_points WHERE user_id=? ORDER BY ts",
+                            (current_user()["id"],)).fetchall()
+    days = {}
+    prev = None
+    for r in rows:
+        d = _ist_day(r["ts"])
+        e = days.setdefault(d, {"day": d, "points": 0, "km": 0.0, "first": r["ts"], "last": r["ts"]})
+        e["points"] += 1
+        e["last"] = r["ts"]
+        if prev and _ist_day(prev["ts"]) == d:
+            e["km"] += haversine_km(prev["lat"], prev["lng"], r["lat"], r["lng"])
+        prev = r
+    out = sorted(days.values(), key=lambda x: x["day"], reverse=True)
+    for e in out:
+        e["km"] = round(e["km"], 1)
+        e["from"] = datetime.fromtimestamp(e.pop("first"), IST).strftime("%I:%M %p")
+        e["to"] = datetime.fromtimestamp(e.pop("last"), IST).strftime("%I:%M %p")
+    total = round(sum(e["km"] for e in out), 1)
+    return {"days": out, "total_km": total, "recording": current_user()["save_timeline"] != 0}
+
+
+@app.route("/api/timeline")
+def api_timeline_day():
+    day = request.args.get("day", "")
+    if day == "all":
+        rows = get_db().execute("SELECT lat, lng, ts FROM location_points WHERE user_id=? ORDER BY ts",
+                                (current_user()["id"],)).fetchall()
+    else:
+        try:
+            a, b = _day_bounds(day)
+        except ValueError:
+            return {"error": "bad day"}, 400
+        rows = get_db().execute("SELECT lat, lng, ts FROM location_points WHERE user_id=? AND ts>=? AND ts<? ORDER BY ts",
+                                (current_user()["id"], a, b)).fetchall()
+    pts = [[round(r["lat"], 6), round(r["lng"], 6), int(r["ts"])] for r in rows]
+    # parikrama stops passed within 1 km
+    stops, seen = [], set()
+    if pts:
+        cand = get_db().execute("SELECT id, stage, serial, village, lat, lng FROM stops WHERE lat IS NOT NULL").fetchall()
+        lat_min, lat_max = min(p[0] for p in pts) - .02, max(p[0] for p in pts) + .02
+        lng_min, lng_max = min(p[1] for p in pts) - .02, max(p[1] for p in pts) + .02
+        for s in cand:
+            if not (lat_min <= s["lat"] <= lat_max and lng_min <= s["lng"] <= lng_max):
+                continue
+            for p in pts:
+                if haversine_km(p[0], p[1], s["lat"], s["lng"]) <= 1.0:
+                    if s["id"] not in seen:
+                        seen.add(s["id"])
+                        stops.append({"id": s["id"], "v": s["village"], "st": s["stage"], "n": s["serial"],
+                                      "at": datetime.fromtimestamp(p[2], IST).strftime("%d %b, %I:%M %p"), "ts": p[2]})
+                    break
+        stops.sort(key=lambda x: x["ts"])
+    return {"points": pts, "stops": stops}
+
+
+@app.route("/timeline/delete", methods=["POST"])
+def timeline_delete():
+    day = request.form.get("day", "")
+    db = get_db()
+    if day == "all":
+        db.execute("DELETE FROM location_points WHERE user_id=?", (current_user()["id"],))
+        flash("Your whole timeline was deleted.", "ok")
+    else:
+        try:
+            a, b = _day_bounds(day)
+        except ValueError:
+            abort(400)
+        db.execute("DELETE FROM location_points WHERE user_id=? AND ts>=? AND ts<?", (current_user()["id"], a, b))
+        flash(f"Timeline for {day} deleted.", "ok")
+    db.commit()
+    return redirect(url_for("timeline"))
 
 
 @app.route("/api/location", methods=["POST"])
@@ -759,17 +901,89 @@ def api_online():
     return {"online": out, "minutes": ONLINE_MINUTES}
 
 
+@app.route("/api/reports")
+def api_reports():
+    """Approved path reports from the last REPORT_DAYS days (plus my own pending ones)."""
+    me = current_user()
+    since = datetime.now(timezone.utc).timestamp() - REPORT_DAYS * 86400
+    rows = get_db().execute(
+        """SELECT r.*, u.username FROM path_reports r JOIN users u ON u.id=r.user_id
+           WHERE r.created_ts >= ? AND (r.status='approved' OR (r.status='pending' AND r.user_id=?))
+           ORDER BY r.id DESC LIMIT 2000""", (since, me["id"])).fetchall()
+    return {"kinds": REPORT_KINDS, "reports": [{
+        "id": r["id"], "lat": r["lat"], "lng": r["lng"], "kind": r["kind"], "label": REPORT_KINDS.get(r["kind"], r["kind"]),
+        "note": r["note"] or "", "mode": r["mode"] or "all", "by": r["username"], "at": r["created_at"],
+        "pending": r["status"] == "pending", "mine": r["user_id"] == me["id"],
+        "days": int((datetime.now(timezone.utc).timestamp() - r["created_ts"]) // 86400)} for r in rows]}
+
+
+@app.route("/api/reports", methods=["POST"])
+def api_report_create():
+    user = current_user()
+    f = request.form
+    lat, lng = parse_float(f.get("lat"), -90, 90), parse_float(f.get("lng"), -180, 180)
+    kind = f.get("kind", "")
+    note = f.get("note", "").strip()[:500]
+    mode = f.get("mode", "all") if f.get("mode") in ("walk", "bike", "car", "all") else "all"
+    if lat is None or lng is None:
+        return {"error": "Tap the spot on the map you want to report."}, 400
+    if kind not in REPORT_KINDS:
+        return {"error": "Choose what kind of report this is."}, 400
+    if kind == "other" and len(note) < 3:
+        return {"error": "Please write a short note."}, 400
+    s_lat, s_lng = parse_float(f.get("my_lat"), -90, 90), parse_float(f.get("my_lng"), -180, 180)
+    s_acc = parse_float(f.get("my_acc"), 0, 1e7)
+    distance = haversine_km(lat, lng, s_lat, s_lng) if s_lat is not None and s_lng is not None else None
+    if user["role"] != "admin" and REQUIRE_GPS:
+        if distance is None:
+            return {"error": "We need your current location to accept a path report."}, 400
+        if s_acc is not None and s_acc > GPS_MAX_ACCURACY_M:
+            return {"error": "Your GPS signal is too weak. Step outside and try again."}, 400
+        if distance > REPORT_RADIUS_KM:
+            return {"error": f"You are {distance:.1f} km from that spot. You can only report paths within {REPORT_RADIUS_KM:g} km of where you are."}, 400
+    auto = user["role"] in ("super", "admin")
+    ts = datetime.now(timezone.utc).timestamp()
+    get_db().execute(
+        """INSERT INTO path_reports (user_id, lat, lng, kind, note, mode, sender_lat, sender_lng, sender_acc,
+                                     distance_km, status, created_at, created_ts, reviewed_by, reviewed_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (user["id"], lat, lng, kind, note, mode, s_lat, s_lng, s_acc, distance,
+         "approved" if auto else "pending", now(), ts, user["id"] if auto else None, now() if auto else None))
+    get_db().commit()
+    return {"ok": True, "live": auto,
+            "message": "Thank you! Your report is on the map." if auto else "Thank you! The admin will check your report before it shows to everyone."}
+
+
+@app.route("/admin/report/<int:report_id>", methods=["POST"])
+@admin_required
+def admin_report(report_id):
+    action = request.form.get("action")
+    db = get_db()
+    if action == "delete":
+        db.execute("DELETE FROM path_reports WHERE id=?", (report_id,))
+    elif action in ("approve", "reject"):
+        db.execute("UPDATE path_reports SET status=?, reviewed_by=?, reviewed_at=? WHERE id=?",
+                   ("approved" if action == "approve" else "rejected", current_user()["id"], now(), report_id))
+    else:
+        abort(400)
+    db.commit()
+    flash("Path report " + {"delete": "deleted", "approve": "approved", "reject": "rejected"}[action] + ".", "ok")
+    return redirect(request.referrer or url_for("admin_queue"))
+
+
 @app.route("/settings", methods=["GET", "POST"])
 def settings():
     user = current_user()
     if request.method == "POST":
         show = 1 if request.form.get("show_on_map") == "1" else 0
+        save_tl = 1 if request.form.get("save_timeline") == "1" else 0
         name = request.form.get("username", "").strip().lower().lstrip("@")
         err = username_error(name, user["id"]) if name != (user["username"] or "") else None
         if err:
             flash(err, "error")
         else:
-            get_db().execute("UPDATE users SET show_on_map=?, username=? WHERE id=?", (show, name, user["id"]))
+            get_db().execute("UPDATE users SET show_on_map=?, save_timeline=?, username=? WHERE id=?",
+                             (show, save_tl, name, user["id"]))
             get_db().commit()
             flash("Settings saved.", "ok")
             return redirect(url_for("settings"))
@@ -782,7 +996,9 @@ def my_updates():
     rows = get_db().execute(
         """SELECT e.*, s.village, s.stage FROM edits e JOIN stops s ON s.id=e.stop_id
            WHERE e.user_id=? ORDER BY e.id DESC""", (current_user()["id"],)).fetchall()
-    return render_template("my_updates.html", edits=decode(rows))
+    reports = get_db().execute("SELECT * FROM path_reports WHERE user_id=? ORDER BY id DESC",
+                               (current_user()["id"],)).fetchall()
+    return render_template("my_updates.html", edits=decode(rows), reports=reports, kinds=REPORT_KINDS)
 
 
 # ---------------------------------------------------------------- suggest an update
@@ -929,7 +1145,10 @@ def admin_queue():
            FROM edits e JOIN users u ON u.id=e.user_id JOIN stops s ON s.id=e.stop_id
            WHERE e.status='pending' ORDER BY e.id""").fetchall()
     media = media_for("edit_id IN (SELECT id FROM edits WHERE status='pending')", [])
-    return render_template("admin_queue.html", edits=decode(rows), media=media)
+    reports = get_db().execute(
+        """SELECT r.*, u.username, u.name, u.mobile FROM path_reports r JOIN users u ON u.id=r.user_id
+           WHERE r.status='pending' ORDER BY r.id""").fetchall()
+    return render_template("admin_queue.html", edits=decode(rows), media=media, reports=reports, kinds=REPORT_KINDS)
 
 
 @app.route("/admin/edit/<int:edit_id>", methods=["POST"])

@@ -3,6 +3,23 @@
 {% block body %}
 <main class="wrap" style="padding:0 20px 60px">
   <section class="card panel">
+    {% if reports %}
+    <h1>Path reports waiting ({{ reports|length }})</h1>
+    {% for r in reports %}
+    <div class="card" style="padding:14px 16px;margin:14px 0">
+      <p style="margin:0 0 4px"><b>{{ kinds.get(r.kind, r.kind) }}</b> <span class="meta">· {{ {'walk':'🚶 Paidal','bike':'🏍 Bike','car':'🚗 Car'}.get(r.mode, 'All travellers') }} · {{ r.created_at }}</span></p>
+      {% if r.note %}<p style="margin:4px 0">“{{ r.note }}”</p>{% endif %}
+      <p class="meta" style="margin:4px 0">By <b>@{{ r.username }}</b> ({{ r.name }} · {{ r.mobile }}) ·
+        spot <a href="https://www.google.com/maps?q={{ r.lat }},{{ r.lng }}" target="_blank" rel="noopener">{{ '%.5f'|format(r.lat) }}, {{ '%.5f'|format(r.lng) }}</a>
+        {% if r.distance_km is not none %} · sent from <b>{{ '%.1f'|format(r.distance_km) }} km</b> away{% else %} · <span style="color:var(--saffron)">no GPS</span>{% endif %}</p>
+      <form method="post" action="{{ url_for('admin_report', report_id=r.id) }}" class="row">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <button class="btn small" name="action" value="approve">Approve</button>
+        <button class="btn small warn" name="action" value="reject">Reject</button>
+      </form>
+    </div>
+    {% endfor %}
+    {% endif %}
     <h1>Updates waiting for approval ({{ edits|length }})</h1>
     {% for e in edits %}
     <div class="card" style="padding:14px 16px;margin:14px 0">
@@ -28,7 +45,7 @@
       </form>
     </div>
     {% else %}
-      <p class="meta">Nothing to review. 🙏</p>
+      <p class="meta">No stop updates to review. 🙏</p>
     {% endfor %}
   </section>
 </main>

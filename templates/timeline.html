@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}My timeline – Narmada Parikrama{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  .tl{display:grid;grid-template-columns:340px 1fr;gap:16px;padding:16px 20px 40px;max-width:1280px;margin:0 auto}
+  .tl .side{display:flex;flex-direction:column;gap:12px;min-width:0}
+  #tlmap{height:calc(100vh - 140px);min-height:420px;border-radius:14px;border:1px solid var(--line)}
+  .day{display:flex;justify-content:space-between;gap:10px;padding:10px 12px;border-radius:12px;cursor:pointer;border:1px solid transparent}
+  .day:hover{background:var(--river-2)}
+  .day.on{background:var(--river-2);border-color:var(--river)}
+  .day b{display:block}
+  .day small{color:var(--muted)}
+  .day .km{font-weight:700;color:var(--river);white-space:nowrap}
+  .totals{display:flex;gap:10px}
+  .totals div{flex:1;background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+  .totals b{font-family:Fraunces,serif;font-size:22px;display:block}
+  .totals span{font-size:12px;color:var(--muted)}
+  .stoplist div{padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}
+  .stoplist small{color:var(--muted)}
+  .rec{font-size:13px;padding:8px 12px;border-radius:10px}
+  .rec.on{background:var(--yes-bg);color:var(--yes)}.rec.off{background:#fbe3df;color:#a33}
+  @media (max-width:800px){.tl{grid-template-columns:1fr}#tlmap{height:55vh}.tl .side{order:2}}
+</style>
+{% endblock %}
+{% block body %}
+<main class="tl">
+  <section class="side">
+    <section class="card" style="padding:16px">
+      <h1 style="font-family:Fraunces,serif;margin:0 0 6px;font-size:24px">🕒 My timeline</h1>
+      <p class="meta" style="margin:0 0 10px">Your parikrama journey, recorded while the app is open on your phone. Only you can see this.</p>
+      <div id="rec" class="rec"></div>
+    </section>
+    <div class="totals"><div><b id="tKm">–</b><span>km travelled</span></div><div><b id="tDays">–</b><span>days recorded</span></div></div>
+    <section class="card" style="padding:8px">
+      <div class="day" data-day="all" id="allDays"><div><b>Whole journey</b><small>All days on one map</small></div></div>
+      <div id="days"><p class="meta" style="padding:10px">Loading…</p></div>
+    </section>
+    <section class="card" style="padding:14px 16px" id="stopsBox" hidden>
+      <b>Parikrama stops passed</b>
+      <div class="stoplist" id="stops"></div>
+    </section>
+    <section class="card" style="padding:14px 16px">
+      <form method="post" action="{{ url_for('timeline_delete') }}" id="delForm" onsubmit="return confirmDelete()">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <input type="hidden" name="day" id="delDay" value="all">
+        <button class="btn small warn" id="delBtn">Delete whole timeline</button>
+      </form>
+      <p class="meta" style="margin:8px 0 0">Pause recording any time in <a href="{{ url_for('settings') }}">Settings</a>.</p>
+    </section>
+  </section>
+  <div id="tlmap"></div>
+</main>
+<div class="flashes" id="confirmBox" hidden></div>
+<script>
+const URL_DAYS = {{ url_for('api_timeline_days')|tojson }}, URL_DAY = {{ url_for('api_timeline_day')|tojson }}, URL_STOP = {{ url_for('stop_detail', stop_id=0)|tojson }}.replace(/0$/, "");
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const map = L.map("tlmap").setView([22.4, 77.5], 7);
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'}).addTo(map);
+const layer = L.layerGroup().addTo(map);
+const COLORS = ["#1a73e8", "#c8641e", "#7a4fb0", "#188038", "#d63c6f", "#0f6e77"];
+let current = null;
+function confirmDelete() {
+  const what = current && current !== "all" ? "the timeline for " + current : "your WHOLE timeline";
+  return window.confirm ? confirm("Delete " + what + "? This cannot be undone.") : true;
+}
+async function loadDays() {
+  const j = await (await fetch(URL_DAYS)).json();
+  document.getElementById("tKm").textContent = j.total_km;
+  document.getElementById("tDays").textContent = j.days.length;
+  const rec = document.getElementById("rec");
+  rec.className = "rec " + (j.recording ? "on" : "off");
+  rec.textContent = j.recording ? "● Recording is on – keep the app open while you travel." : "⏸ Recording is paused (Settings).";
+  document.getElementById("days").innerHTML = j.days.length ? j.days.map(d => `
+    <div class="day" data-day="${d.day}"><div><b>${new Date(d.day + "T00:00:00").toLocaleDateString("en-IN", {weekday: "short", day: "numeric", month: "short", year: "numeric"})}</b>
+      <small>${d.from} – ${d.to} · ${d.points} points</small></div><div class="km">${d.km} km</div></div>`).join("")
+    : `<p class="meta" style="padding:10px">Nothing recorded yet. Open the map on your phone while you travel, and your journey will appear here.</p>`;
+  document.querySelectorAll(".day").forEach(el => el.onclick = () => show(el.dataset.day));
+  if (j.days.length) show(j.days[0].day);
+}
+async function show(day) {
+  current = day;
+  document.querySelectorAll(".day").forEach(el => el.classList.toggle("on", el.dataset.day === day));
+  document.getElementById("delDay").value = day;
+  document.getElementById("delBtn").textContent = day === "all" ? "Delete whole timeline" : "Delete this day";
+  const j = await (await fetch(URL_DAY + "?day=" + encodeURIComponent(day))).json();
+  layer.clearLayers();
+  const pts = j.points || [];
+  if (!pts.length) { map.setView([22.4, 77.5], 7); return; }
+  // split into days so the whole journey shows each day in its own colour
+  const byDay = {};
+  pts.forEach(p => { const d = new Date(p[2] * 1000 + 5.5 * 3600e3).toISOString().slice(0, 10); (byDay[d] = byDay[d] || []).push(p); });
+  Object.values(byDay).forEach((seg, k) => {
+    const col = COLORS[k % COLORS.length];
+    L.polyline(seg.map(p => [p[0], p[1]]), {color: col, weight: 5, opacity: .85}).addTo(layer);
+    if (day !== "all") seg.forEach(p => L.circleMarker([p[0], p[1]], {radius: 3, color: col, weight: 1, fillOpacity: .9})
+      .bindTooltip(new Date(p[2] * 1000).toLocaleTimeString("en-IN", {hour: "2-digit", minute: "2-digit"})).addTo(layer));
+  });
+  const first = pts[0], last = pts[pts.length - 1];
+  L.circleMarker([first[0], first[1]], {radius: 8, color: "#fff", weight: 3, fillColor: "#188038", fillOpacity: 1}).bindTooltip("Start").addTo(layer);
+  L.circleMarker([last[0], last[1]], {radius: 8, color: "#fff", weight: 3, fillColor: "#d63c2f", fillOpacity: 1}).bindTooltip("End").addTo(layer);
+  map.fitBounds(pts.map(p => [p[0], p[1]]), {padding: [30, 30]});
+  const box = document.getElementById("stopsBox");
+  box.hidden = !(j.stops || []).length;
+  document.getElementById("stops").innerHTML = (j.stops || []).map(s =>
+    `<div><a href="${URL_STOP}${s.id}">${esc(s.v || "Stop")}</a> <small>· Stage ${s.st}, No. ${esc(s.n)} · ${esc(s.at)}</small></div>`).join("");
+}
+document.getElementById("allDays").onclick = () => show("all");
+loadDays();
+</script>
+{% endblock %}

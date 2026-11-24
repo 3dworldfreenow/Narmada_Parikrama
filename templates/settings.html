@@ -8,6 +8,7 @@
     <label for="username">Username</label>
     <div class="at"><span>@</span><input type="text" id="username" name="username" value="{{ user.username }}" required pattern="[a-z0-9_.]{3,20}" autocapitalize="off"></div>
     <label class="chip" style="margin-top:18px;border-style:solid"><input type="checkbox" name="show_on_map" value="1" {% if user.show_on_map != 0 %}checked{% endif %}> Show me on the “online pilgrims” map (approximate area only)</label>
+    <label class="chip" style="margin-top:10px;border-style:solid"><input type="checkbox" name="save_timeline" value="1" {% if user.save_timeline != 0 %}checked{% endif %}> Save my journey to my private <a href="{{ url_for('timeline') }}">timeline</a> (only I can see it)</label>
     <p class="meta">Name: {{ user.name }} · {{ user.email }} · {{ user.mobile }} — visible only to the site admin.</p>
     <p style="margin-top:18px"><button class="btn">Save</button> <a class="btn alt" href="{{ url_for('index') }}">Back to map</a></p>
   </form>

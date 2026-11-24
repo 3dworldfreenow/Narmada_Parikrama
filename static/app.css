@@ -137,3 +137,58 @@ mark{background:#ffe08a;color:#1f2a2e;border-radius:3px}
 .zoomgrp{display:flex;flex-direction:column;border-radius:999px;box-shadow:var(--shadow);overflow:hidden;margin-bottom:4px}
 .zoomgrp .fab{border-radius:0;box-shadow:none;font-size:24px;font-weight:500;line-height:1}
 .zoomgrp .fab+.fab{border-top:1px solid var(--line)}
+
+/* ---------- search results dropdown */
+.searchbox{position:relative}
+.dirbtn{border:none;background:#1a73e8;color:#fff;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;cursor:pointer;flex-shrink:0;margin-right:-6px}
+.results{position:absolute;left:0;right:0;top:calc(100% + 6px);background:var(--solid);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);max-height:60vh;overflow-y:auto;padding:6px;z-index:1200;color:var(--ink)}
+.results[hidden]{display:none}
+.results.inpanel{position:static;margin-top:8px;max-height:40vh;box-shadow:none}
+.rh{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:8px 10px 4px}
+.ri{display:flex;gap:10px;align-items:center;padding:8px 10px;border-radius:10px;cursor:pointer}
+.ri:hover{background:var(--river-2)}
+.ri small{display:block;color:var(--muted);font-size:12px}
+.ri.muted,.muted{color:var(--muted)}
+.ric{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;color:#fff;font-size:11px;font-weight:700;flex-shrink:0}
+.ric.pl{background:var(--river-2);font-size:15px}
+
+/* ---------- panel views */
+#placeView,#dirView,#reportView{overflow-y:auto}
+#placeView[hidden],#dirView[hidden],#reportView[hidden]{display:none}
+.dhead .actions{margin-top:10px}
+
+/* google-style pin */
+.gpin{width:28px;height:40px;position:relative}
+.gpin::before{content:"";position:absolute;left:2px;top:0;width:24px;height:24px;border-radius:50% 50% 50% 0;background:#ea4335;transform:rotate(-45deg);box-shadow:0 2px 6px rgba(0,0,0,.35)}
+.gpin span{position:absolute;left:10px;top:8px;width:8px;height:8px;border-radius:50%;background:#7a1a12}
+#map.picking{cursor:crosshair}
+
+/* ---------- directions */
+.modes{display:flex;gap:4px;background:var(--river-2);border-radius:12px;padding:4px;margin-top:10px}
+.modes button{flex:1;border:none;background:transparent;border-radius:9px;padding:8px 4px;cursor:pointer;font-weight:600;font-size:13.5px;color:var(--muted);white-space:nowrap}
+.modes button[aria-selected=true]{background:var(--solid);color:var(--ink);box-shadow:0 1px 4px rgba(0,0,0,.1)}
+.endpoints{position:relative;margin-top:10px;padding-right:34px}
+.ep{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.ep input{flex:1;min-width:0;border:1px solid var(--line);background:var(--solid);color:var(--ink);border-radius:10px;padding:9px 10px;font:inherit}
+.ep input:focus{outline:2px solid #1a73e8;outline-offset:-1px}
+.epdot{width:12px;height:12px;border-radius:50%;flex-shrink:0;border:3px solid #1a73e8}
+.epdot.b{border-color:#ea4335;background:#ea4335}
+.epbtn{border:1px solid var(--line);background:var(--solid);border-radius:9px;width:34px;height:36px;cursor:pointer;font-size:16px;flex-shrink:0}
+.swap{position:absolute;right:0;top:20px;border:1px solid var(--line);background:var(--solid);border-radius:50%;width:30px;height:30px;cursor:pointer;font-size:16px}
+.routesum{padding:4px 0 10px}
+.rtime{font-size:22px;font-weight:700;color:#188038}
+.rdist{color:var(--muted);font-size:16px}
+.routesum small{display:block;color:var(--muted)}
+.steps{list-style:none;padding:0;margin:0}
+.steps li{display:grid;grid-template-columns:28px 1fr auto;gap:8px;align-items:start;padding:9px 2px;border-bottom:1px solid var(--line)}
+.steps .si{font-size:18px;line-height:1.1;text-align:center;color:#1a73e8}
+.steps small{color:var(--muted);white-space:nowrap}
+
+/* ---------- path reports */
+.kinds{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.kind{border:1px solid var(--line);background:var(--solid);border-radius:11px;padding:9px 8px;text-align:left;cursor:pointer;font-size:13.5px}
+.kind.on{border-color:#1a73e8;background:#e8f0fe;color:#1a3e7a;font-weight:600}
+.rnote{width:100%;min-height:70px;border:1px solid var(--line);border-radius:11px;padding:10px;font:inherit;background:var(--solid);color:var(--ink);margin-bottom:6px}
+.rmark{width:30px;height:30px;border-radius:50%;background:#fff;display:grid;place-items:center;font-size:16px;box-shadow:0 2px 8px rgba(0,0,0,.3);border:2px solid #fff}
+.rmark.pend{opacity:.55;border-style:dashed;border-color:#999}
+@media (max-width:760px){.kinds{grid-template-columns:1fr 1fr}.results{max-height:50vh}}

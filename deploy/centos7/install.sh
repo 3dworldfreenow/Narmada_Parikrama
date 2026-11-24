@@ -92,7 +92,8 @@ EOF
 fi
 
 say "Creating the database (first run only)"
-sudo -u "$APP_USER" bash -c "set -a; . '$ENV_FILE'; set +a; cd '$APP_DIR' && .venv/bin/flask --app app init-db && .venv/bin/flask --app app apply-locations"
+bash "$APP_DIR/deploy/centos7/flask-cmd.sh" init-db
+bash "$APP_DIR/deploy/centos7/flask-cmd.sh" apply-locations
 
 # ---------------------------------------------------------------- 5. systemd
 say "Setting up the systemd service"

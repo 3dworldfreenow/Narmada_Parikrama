@@ -7,7 +7,7 @@
 set -euo pipefail
 APP_DIR=/opt/narmada; ENV_FILE=/etc/narmada.env
 cmd="${1:-help}"; shift || true
-run() { sudo -u narmada bash -c 'set -a; . "$0"; set +a; cd "$1"; shift; exec .venv/bin/flask --app app "$@"' "$ENV_FILE" "$APP_DIR" "$@"; }
+run() { bash "$APP_DIR/deploy/centos7/flask-cmd.sh" "$@"; }
 case "$cmd" in
   create)   run create-admin "$@" ;;
   promote)  run make-admin "$@" ;;

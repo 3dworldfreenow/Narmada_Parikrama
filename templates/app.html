@@ -20,7 +20,11 @@
   <div class="brand"><span class="om">ॐ</span><span class="bt">Narmada<br><small>Parikrama</small></span></div>
   <label class="searchbox">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-    <input id="q" type="search" placeholder="Search village, temple, ashram…" autocomplete="off" aria-label="Search">
+    <input id="q" type="search" placeholder="Search ghat, village, temple, place…" autocomplete="off" aria-label="Search" aria-controls="results">
+    <button class="dirbtn" id="dirOpen" type="button" title="Directions" aria-label="Directions">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M21.7 11.3l-9-9a1 1 0 0 0-1.4 0l-9 9a1 1 0 0 0 0 1.4l9 9a1 1 0 0 0 1.4 0l9-9a1 1 0 0 0 0-1.4zM14 14.5V12h-4v3H8v-4a1 1 0 0 1 1-1h5V7.5l3.5 3.5-3.5 3.5z"/></svg>
+    </button>
+    <div class="results" id="results" role="listbox" hidden></div>
   </label>
   <div class="usermenu">
     <button class="avatar" id="avatarBtn" aria-haspopup="true" aria-expanded="false" title="@{{ user.username }}">
@@ -28,6 +32,7 @@
     </button>
     <div class="menu" id="menu" hidden>
       <div class="menuhead"><b>@{{ user.username }}</b><span>{{ {'admin':'Admin','super':'Super user'}.get(user.role, 'Pilgrim') }}</span></div>
+      <a href="{{ url_for('timeline') }}">🕒 My timeline</a>
       <a href="{{ url_for('my_updates') }}">My updates</a>
       <a href="{{ url_for('settings') }}">Settings &amp; privacy</a>
       {% if user.role == 'admin' %}
@@ -78,6 +83,9 @@
   </div>
 
   <div id="detailView" hidden></div>
+  <div id="placeView" hidden></div>
+  <div id="dirView" hidden></div>
+  <div id="reportView" hidden></div>
 </aside>
 
 <div class="fabs">
@@ -101,6 +109,8 @@ const URLS = {stop: {{ url_for('stop_detail', stop_id=0)|tojson }}.replace(/0$/,
               edit: {{ url_for('edit_stop', stop_id=0)|tojson }}.replace(/0\/edit$/, ""),
               online: {{ url_for('api_online')|tojson }}, beat: {{ url_for('api_heartbeat')|tojson }}};
 const LOCAL_MAP = {{ (url_for('map_tiles') if local_map else '')|tojson }}, LOCAL_MAXZOOM = {{ map_maxzoom }};
+const REPORT_KINDS = {{ report_kinds|tojson }}, REPORT_RADIUS = {{ report_radius }};
+const URLS_EXTRA = {reports: {{ url_for('api_reports')|tojson }}};
 const STAGES = {1:{n:"Stage 1",b:"South bank",c:"#0f6e77"}, 2:{n:"Stage 2",b:"North bank",c:"#c8641e"}, 3:{n:"Stage 3",b:"South bank",c:"#7a4fb0"}};
 </script>
 <script src="{{ url_for('static', filename='app.js') }}"></script>
