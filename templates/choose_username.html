@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Choose a username – Narmada Parikrama{% endblock %}
+{% block body %}
+<main class="auth"><section class="card panel form">
+  <h1>Choose a username</h1>
+  <p class="meta">Other pilgrims will see this name on the map and next to your updates. Your real name, email and mobile stay private.</p>
+  <form method="post">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <label for="username">Username <span class="hint">(3–20: small letters, numbers, _ or .)</span></label>
+    <div class="at"><span>@</span><input type="text" id="username" name="username" required pattern="[a-z0-9_.]{3,20}" autocapitalize="off" autocomplete="username"></div>
+    <p style="margin-top:18px"><button class="btn">Continue</button></p>
+  </form>
+</section></main>
+{% endblock %}

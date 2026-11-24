@@ -34,6 +34,8 @@ GPS_RADIUS_KM = float(os.environ.get("GPS_RADIUS_KM", "3"))
 OSM_RADIUS_KM = float(os.environ.get("OSM_RADIUS_KM", "5"))
 GPS_MAX_ACCURACY_M = float(os.environ.get("GPS_MAX_ACCURACY_M", "1000"))
 REQUIRE_GPS = os.environ.get("REQUIRE_GPS", "1") != "0"
+ONLINE_MINUTES = int(os.environ.get("ONLINE_MINUTES", "5"))      # "online" = seen in the last N minutes
+LOCATION_MAX_AGE_H = float(os.environ.get("LOCATION_MAX_AGE_H", "12"))  # ask for location again after N hours
 MAX_PHOTOS = 6
 MAX_PHOTO_MB = 10
 MAX_VIDEO_MB = 60
@@ -162,10 +164,15 @@ def init_db():
     for table, col, typ in [("stops", "lat", "REAL"), ("stops", "lng", "REAL"),
                             ("stops", "located_by", "INTEGER"), ("stops", "loc_src", "TEXT"),
                             ("edits", "lat", "REAL"), ("edits", "lng", "REAL"),
-                            ("edits", "accuracy", "REAL"), ("edits", "distance_km", "REAL")]:
+                            ("edits", "accuracy", "REAL"), ("edits", "distance_km", "REAL"),
+                            ("users", "username", "TEXT"), ("users", "last_seen", "TEXT"),
+                            ("users", "last_seen_ts", "REAL"), ("users", "last_lat", "REAL"),
+                            ("users", "last_lng", "REAL"), ("users", "last_acc", "REAL"),
+                            ("users", "show_on_map", "INTEGER DEFAULT 1")]:
         cols = [r[1] for r in db.execute(f"PRAGMA table_info({table})")]
         if col not in cols:
             db.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typ}")
+    db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username COLLATE NOCASE)")
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     if db.execute("SELECT COUNT(*) FROM stops").fetchone()[0] == 0:
         with open(SEED_FILE, encoding="utf-8") as fh:
@@ -273,8 +280,46 @@ def csrf_token():
 @app.before_request
 def check_csrf():
     if request.method == "POST":
-        if request.form.get("_csrf") != session.get("_csrf"):
+        token = request.form.get("_csrf") or request.headers.get("X-CSRF-Token")
+        if not token or token != session.get("_csrf"):
             abort(400, "Form expired. Go back, refresh the page and try again.")
+
+
+# Pages anyone may open without logging in / sharing location.
+OPEN_ENDPOINTS = {"login", "register", "static", "logout", "choose_username", "locate", "api_location"}
+
+
+@app.before_request
+def require_login_and_location():
+    """The app is for registered pilgrims: log in, pick a username, share location."""
+    ep = request.endpoint or ""
+    if ep in OPEN_ENDPOINTS or app.config.get("OPEN_ACCESS"):
+        return None
+    user = current_user()
+    if not user:
+        if ep.startswith("api_"):
+            return {"error": "login required"}, 401
+        return redirect(url_for("login", next=request.full_path if request.query_string else request.path))
+    if not user["username"]:
+        return redirect(url_for("choose_username", next=request.path))
+    fresh = session.get("loc_at") and (datetime.now(timezone.utc).timestamp() - session["loc_at"]) < LOCATION_MAX_AGE_H * 3600
+    if not fresh and not session.get("loc_skip"):
+        if ep.startswith("api_"):
+            return {"error": "location required"}, 428
+        return redirect(url_for("locate", next=request.path))
+    return None
+
+
+USERNAME_RE = re.compile(r"^[a-z0-9_.]{3,20}$")
+
+
+def username_error(name, exclude_id=None):
+    if not USERNAME_RE.match(name):
+        return "Username must be 3–20 characters: small letters, numbers, _ or . (no spaces)."
+    row = get_db().execute("SELECT id FROM users WHERE username=? COLLATE NOCASE", (name,)).fetchone()
+    if row and row["id"] != exclude_id:
+        return "That username is taken. Please choose another."
+    return None
 
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -401,7 +446,7 @@ def media_for(where, args):
 def index():
     db = get_db()
     rows = db.execute(
-        """SELECT s.*, u.name AS updated_by_name FROM stops s
+        """SELECT s.*, COALESCE(u.username, u.name) AS updated_by_name FROM stops s
            LEFT JOIN users u ON u.id = s.updated_by ORDER BY s.stage, s.id""").fetchall()
     photo_counts = dict(db.execute(
         """SELECT m.stop_id, COUNT(*) FROM media m JOIN edits e ON e.id=m.edit_id
@@ -415,38 +460,33 @@ def index():
         "lat": r["lat"], "lng": r["lng"], "ls": r["loc_src"], "pm": photo_counts.get(r["id"], 0),
     } for r in rows]
     recent = db.execute(
-        """SELECT e.*, u.name AS user_name, s.village, s.stage FROM edits e
+        """SELECT e.*, COALESCE(u.username, u.name) AS user_name, s.village, s.stage FROM edits e
            JOIN users u ON u.id=e.user_id JOIN stops s ON s.id=e.stop_id
            WHERE e.status='approved' ORDER BY e.reviewed_at DESC, e.id DESC LIMIT 8""").fetchall()
-    return render_template("index.html", data=data, recent=recent)
+    return render_template("app.html", data=data, recent=recent)
 
 
 @app.route("/map")
 def map_view():
-    rows = get_db().execute(
-        "SELECT id, stage, serial, village, lat, lng, loc_src, food, rations FROM stops WHERE lat IS NOT NULL ORDER BY stage, id").fetchall()
-    total = get_db().execute("SELECT COUNT(*) FROM stops").fetchone()[0]
-    pts = [{"id": r["id"], "st": r["stage"], "n": r["serial"], "v": r["village"], "lat": r["lat"], "lng": r["lng"],
-            "src": r["loc_src"], "fd": r["food"], "sd": r["rations"]} for r in rows]
-    return render_template("map.html", pts=pts, total=total)
+    return redirect(url_for("index"))
 
 
 @app.route("/stop/<int:stop_id>")
 def stop_detail(stop_id):
     db = get_db()
-    stop = db.execute("""SELECT s.*, u.name AS updated_by_name FROM stops s
+    stop = db.execute("""SELECT s.*, COALESCE(u.username, u.name) AS updated_by_name FROM stops s
                          LEFT JOIN users u ON u.id=s.updated_by WHERE s.id=?""", (stop_id,)).fetchone()
     if not stop:
         abort(404)
     history = db.execute(
-        """SELECT e.*, u.name AS user_name FROM edits e JOIN users u ON u.id=e.user_id
+        """SELECT e.*, COALESCE(u.username, u.name) AS user_name FROM edits e JOIN users u ON u.id=e.user_id
            WHERE e.stop_id=? AND e.status='approved' ORDER BY e.id DESC""", (stop_id,)).fetchall()
     mine = []
     if current_user():
         mine = db.execute("""SELECT * FROM edits WHERE stop_id=? AND user_id=? AND status='pending'
                              ORDER BY id DESC""", (stop_id, current_user()["id"])).fetchall()
     gallery = db.execute(
-        """SELECT m.*, u.name AS user_name, e.created_at AS edit_date FROM media m
+        """SELECT m.*, COALESCE(u.username, u.name) AS user_name, e.created_at AS edit_date FROM media m
            JOIN edits e ON e.id=m.edit_id JOIN users u ON u.id=e.user_id
            WHERE m.stop_id=? AND e.status='approved' ORDER BY m.id DESC""", (stop_id,)).fetchall()
     mine_media = media_for("edit_id IN (%s)" % ",".join("?" * len(mine)), [e["id"] for e in mine]) if mine else {}
@@ -481,13 +521,17 @@ def decode(rows):
 def register():
     if current_user():
         return redirect(url_for("index"))
-    form = {"name": "", "email": "", "mobile": ""}
+    form = {"username": "", "name": "", "email": "", "mobile": ""}
     if request.method == "POST":
-        form = {k: request.form.get(k, "").strip() for k in ("name", "email", "mobile")}
+        form = {k: request.form.get(k, "").strip() for k in ("username", "name", "email", "mobile")}
         form["email"] = form["email"].lower()
+        form["username"] = form["username"].lower().lstrip("@")
         password = request.form.get("password", "")
         confirm = request.form.get("confirm", "")
         errors = []
+        uerr = username_error(form["username"])
+        if uerr:
+            errors.append(uerr)
         if len(form["name"]) < 2:
             errors.append("Please enter your full name.")
         if not EMAIL_RE.match(form["email"]):
@@ -508,28 +552,30 @@ def register():
             first_user = db.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0
             role = "admin" if (first_user and not ADMIN_EMAILS) or form["email"] in ADMIN_EMAILS else "user"
             cur = db.execute(
-                "INSERT INTO users (name, email, mobile, password_hash, role, created_at) VALUES (?,?,?,?,?,?)",
-                (form["name"], form["email"], form["mobile"].replace(" ", ""),
+                "INSERT INTO users (username, name, email, mobile, password_hash, role, created_at) VALUES (?,?,?,?,?,?,?)",
+                (form["username"], form["name"], form["email"], form["mobile"].replace(" ", ""),
                  generate_password_hash(password), role, now()))
             db.commit()
             session.clear()
             session["uid"] = cur.lastrowid
             flash("Welcome! Your account is ready." + (" You are the admin." if role == "admin" else ""), "ok")
-            return redirect(url_for("index"))
+            return redirect(url_for("locate"))
     return render_template("register.html", form=form)
 
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        email = request.form.get("email", "").strip().lower()
-        user = get_db().execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
+        login_id = request.form.get("login", request.form.get("email", "")).strip().lower().lstrip("@")
+        user = get_db().execute("SELECT * FROM users WHERE email=? OR username=? COLLATE NOCASE",
+                                (login_id, login_id)).fetchone()
         if user and check_password_hash(user["password_hash"], request.form.get("password", "")):
             session.clear()
             session["uid"] = user["id"]
             nxt = request.args.get("next", "")
-            return redirect(nxt if nxt.startswith("/") and not nxt.startswith("//") else url_for("index"))
-        flash("Wrong email or password.", "error")
+            nxt = nxt if nxt.startswith("/") and not nxt.startswith("//") else url_for("index")
+            return redirect(url_for("locate", next=nxt))
+        flash("Wrong username/email or password.", "error")
     return render_template("login.html")
 
 
@@ -537,6 +583,117 @@ def login():
 def logout():
     session.clear()
     return redirect(url_for("index"))
+
+
+def safe_next(default="index"):
+    nxt = request.args.get("next", "")
+    return nxt if nxt.startswith("/") and not nxt.startswith("//") else url_for(default)
+
+
+@app.route("/choose-username", methods=["GET", "POST"])
+def choose_username():
+    user = current_user()
+    if not user:
+        return redirect(url_for("login"))
+    if request.method == "POST":
+        name = request.form.get("username", "").strip().lower().lstrip("@")
+        err = username_error(name, user["id"])
+        if err:
+            flash(err, "error")
+        else:
+            get_db().execute("UPDATE users SET username=? WHERE id=?", (name, user["id"]))
+            get_db().commit()
+            return redirect(url_for("locate", next=safe_next()))
+    return render_template("choose_username.html")
+
+
+@app.route("/locate")
+def locate():
+    if not current_user():
+        return redirect(url_for("login"))
+    if not current_user()["username"]:
+        return redirect(url_for("choose_username", next=safe_next()))
+    return render_template("locate.html", next_url=safe_next())
+
+
+def _save_location(user, form):
+    lat = parse_float(form.get("lat"), -90, 90)
+    lng = parse_float(form.get("lng"), -180, 180)
+    acc = parse_float(form.get("accuracy"), 0, 1e7)
+    if lat is None or lng is None:
+        return False
+    ts = datetime.now(timezone.utc).timestamp()
+    get_db().execute("""UPDATE users SET last_lat=?, last_lng=?, last_acc=?, last_seen=?, last_seen_ts=?
+                        WHERE id=?""", (lat, lng, acc, now(), ts, user["id"]))
+    get_db().commit()
+    session["loc_at"] = ts
+    return True
+
+
+@app.route("/api/location", methods=["POST"])
+def api_location():
+    user = current_user()
+    if not user:
+        return {"error": "login required"}, 401
+    if form_skip := request.form.get("skip"):
+        if user["role"] == "admin" and form_skip == "1":   # admins may enter without GPS (e.g. on a desktop)
+            session["loc_skip"] = True
+            return {"ok": True}
+        return {"error": "location required"}, 400
+    if not _save_location(user, request.form):
+        return {"error": "bad location"}, 400
+    return {"ok": True}
+
+
+@app.route("/api/heartbeat", methods=["POST"])
+def api_heartbeat():
+    """Called every minute by the map page: keeps the user 'online' and their position fresh."""
+    user = current_user()
+    if request.form.get("lat"):
+        _save_location(user, request.form)
+    else:
+        ts = datetime.now(timezone.utc).timestamp()
+        get_db().execute("UPDATE users SET last_seen=?, last_seen_ts=? WHERE id=?", (now(), ts, user["id"]))
+        get_db().commit()
+    return {"ok": True}
+
+
+@app.route("/api/online")
+def api_online():
+    """Users seen in the last ONLINE_MINUTES. Positions are rounded to ~1 km for privacy."""
+    me = current_user()
+    since = datetime.now(timezone.utc).timestamp() - ONLINE_MINUTES * 60
+    rows = get_db().execute(
+        """SELECT id, username, role, last_lat, last_lng, last_seen_ts, show_on_map FROM users
+           WHERE last_seen_ts >= ? AND username IS NOT NULL ORDER BY last_seen_ts DESC""", (since,)).fetchall()
+    out = []
+    for r in rows:
+        visible = bool(r["show_on_map"]) and r["last_lat"] is not None
+        out.append({
+            "u": r["username"], "me": r["id"] == me["id"],
+            "role": r["role"] if r["role"] in ("admin", "super") else "",
+            "lat": round(r["last_lat"], 2) if visible else None,
+            "lng": round(r["last_lng"], 2) if visible else None,
+            "ago": int((datetime.now(timezone.utc).timestamp() - r["last_seen_ts"]) // 60),
+        })
+    return {"online": out, "minutes": ONLINE_MINUTES}
+
+
+@app.route("/settings", methods=["GET", "POST"])
+def settings():
+    user = current_user()
+    if request.method == "POST":
+        show = 1 if request.form.get("show_on_map") == "1" else 0
+        name = request.form.get("username", "").strip().lower().lstrip("@")
+        err = username_error(name, user["id"]) if name != (user["username"] or "") else None
+        if err:
+            flash(err, "error")
+        else:
+            get_db().execute("UPDATE users SET show_on_map=?, username=? WHERE id=?", (show, name, user["id"]))
+            get_db().commit()
+            flash("Settings saved.", "ok")
+            return redirect(url_for("settings"))
+    return render_template("settings.html")
 
 
 @app.route("/my-updates")
@@ -687,7 +844,7 @@ def apply_edit(db, edit):
 @admin_required
 def admin_queue():
     rows = get_db().execute(
-        """SELECT e.*, u.name AS user_name, u.email, u.mobile, u.role, s.village, s.stage, s.serial,
+        """SELECT e.*, u.name || ' (@' || COALESCE(u.username, '?') || ')' AS user_name, u.email, u.mobile, u.role, s.village, s.stage, s.serial,
                   s.lat AS stop_lat, s.lng AS stop_lng, s.loc_src
            FROM edits e JOIN users u ON u.id=e.user_id JOIN stops s ON s.id=e.stop_id
            WHERE e.status='pending' ORDER BY e.id""").fetchall()

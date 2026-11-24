@@ -134,3 +134,13 @@ input[type=file]{font:inherit;font-size:14px;max-width:100%}
 .kv dd{overflow-wrap:anywhere}
 @media (max-width:520px){.kv{grid-template-columns:1fr;gap:0}.kv dt{margin-top:10px;font-size:12.5px}}
 .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin:0 3px 0 8px;vertical-align:middle}
+/* auth / gate pages */
+main.auth{min-height:calc(100vh - 50px);display:grid;place-items:center;padding:24px 16px;background:radial-gradient(1200px 600px at 20% -10%,rgba(15,110,119,.25),transparent),radial-gradient(900px 500px at 110% 110%,rgba(200,100,30,.18),transparent)}
+main.auth .panel{width:min(460px,100%);margin:0;box-shadow:0 20px 50px -20px rgba(10,40,50,.35)}
+.brandmark{color:var(--saffron);font-weight:600;letter-spacing:.08em;font-size:13px}
+.at{display:flex;align-items:center;border:1.5px solid var(--line);border-radius:9px;background:var(--bg);padding-left:10px}
+.at span{color:var(--muted);font-weight:600}
+.at input{border:none !important;background:transparent !important}
+.linkbtn.dark{color:var(--muted);text-decoration:underline}
+.locpulse{font-size:44px;width:84px;height:84px;margin:4px auto 6px;border-radius:50%;display:grid;place-items:center;background:var(--river-2);animation:lp 2s infinite}
+@keyframes lp{0%{box-shadow:0 0 0 0 rgba(15,110,119,.4)}70%{box-shadow:0 0 0 22px rgba(15,110,119,0)}100%{box-shadow:0 0 0 0 rgba(15,110,119,0)}}

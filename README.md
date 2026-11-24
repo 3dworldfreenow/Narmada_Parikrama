@@ -4,6 +4,11 @@ An English, searchable guide to the full Narmada Parikrama (about 2,934 km, 805 
 
 ## Features
 
+- **Map-first app.** The whole screen is a map (OpenStreetMap / CARTO tiles), with a search bar, a stops list with filters and a stop detail panel. On phones the panel is a bottom sheet.
+- **Login and location required.** Every visitor must log in with a **username** and share their GPS location before using the app. Location is asked for again after 12 hours (`LOCATION_MAX_AGE_H`). Admins can skip the location step from a desktop.
+- **Online pilgrims.** An "Online" tab and live map pins show users active in the last 5 minutes (`ONLINE_MINUTES`). Only usernames are shown, and positions are rounded to about 1 km. Anyone can hide themselves under **Settings**.
+- **Road routes.** From any stop: route *from my location* or *to the next stop* along real roads (walk, bike or car), with distance and time, using OSRM on OpenStreetMap data (routing.openstreetmap.de, a free fair-use service). There is also a **Navigate** button that opens Google Maps.
+
 - **Search and filters.** Search by village, temple or ashram in English, or by Marathi village name. Filter by stage, cooked food, sadavrat (rations), place to stay, built ghat, bridge or special note.
 - **Accounts.** Users register with name, email, mobile number and password. Mobile and email are visible only to the admin.
 - **Community updates.** Any logged-in user can suggest changes to any stop, as many times as they like. Each update records who made it, when, and an optional "how do you know?" note.

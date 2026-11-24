@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b4f56">
+<title>Narmada Parikrama – Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=Noto+Sans+Devanagari:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body>
+<div id="map" aria-label="Map of the parikrama route"></div>
+
+<!-- top bar -->
+<header class="topbar">
+  <div class="brand"><span class="om">ॐ</span><span class="bt">Narmada<br><small>Parikrama</small></span></div>
+  <label class="searchbox">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    <input id="q" type="search" placeholder="Search village, temple, ashram…" autocomplete="off" aria-label="Search">
+  </label>
+  <div class="usermenu">
+    <button class="avatar" id="avatarBtn" aria-haspopup="true" aria-expanded="false" title="@{{ user.username }}">
+      {{ (user.username or '?')[:1]|upper }}{% if pending_count %}<span class="dotbadge">{{ pending_count }}</span>{% endif %}
+    </button>
+    <div class="menu" id="menu" hidden>
+      <div class="menuhead"><b>@{{ user.username }}</b><span>{{ {'admin':'Admin','super':'Super user'}.get(user.role, 'Pilgrim') }}</span></div>
+      <a href="{{ url_for('my_updates') }}">My updates</a>
+      <a href="{{ url_for('settings') }}">Settings &amp; privacy</a>
+      {% if user.role == 'admin' %}
+        <a href="{{ url_for('admin_queue') }}">Approvals{% if pending_count %} <span class="pill">{{ pending_count }}</span>{% endif %}</a>
+        <a href="{{ url_for('admin_users') }}">Users</a>
+      {% endif %}
+      <form method="post" action="{{ url_for('logout') }}"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button>Log out</button></form>
+    </div>
+  </div>
+</header>
+
+{% with msgs = get_flashed_messages(with_categories=true) %}{% if msgs %}
+<div class="toasts">{% for cat, m in msgs %}<div class="toast {{ cat }}">{{ m }}</div>{% endfor %}</div>
+{% endif %}{% endwith %}
+
+<!-- side panel / bottom sheet -->
+<aside class="panel" id="panel" data-size="half">
+  <button class="grip" id="grip" aria-label="Expand or collapse the list"><span></span></button>
+
+  <div id="listView">
+    <div class="tabs2" role="tablist">
+      <button role="tab" aria-selected="true" data-tab="stops">Stops <span id="stopCount" class="cnt"></span></button>
+      <button role="tab" aria-selected="false" data-tab="online"><span class="live"></span>Online <span id="onlineCount" class="cnt">0</span></button>
+    </div>
+
+    <div id="stopsTab">
+      <div class="chiprow" role="group" aria-label="Stage">
+        <button class="chip2 on" data-s="0">All</button>
+        <button class="chip2" data-s="1"><i class="sw s1"></i>Stage 1 · South</button>
+        <button class="chip2" data-s="2"><i class="sw s2"></i>Stage 2 · North</button>
+        <button class="chip2" data-s="3"><i class="sw s3"></i>Stage 3 · South</button>
+      </div>
+      <div class="chiprow small" role="group" aria-label="Filters">
+        <button class="chip2" data-f="food">🍲 Food</button>
+        <button class="chip2" data-f="rat">🌾 Sadavrat</button>
+        <button class="chip2" data-f="stay">🏠 Stay</button>
+        <button class="chip2" data-f="ghat">🛕 Ghat</button>
+        <button class="chip2" data-f="pm">📷 Photos</button>
+        <button class="chip2" data-f="near">📍 Near me</button>
+      </div>
+      <div class="list" id="list" role="list"></div>
+    </div>
+
+    <div id="onlineTab" hidden>
+      <p class="hintline">Pilgrims active in the last {{ 5 }} minutes. Locations are approximate (≈1 km).</p>
+      <div class="list" id="onlineList"></div>
+    </div>
+  </div>
+
+  <div id="detailView" hidden></div>
+</aside>
+
+<div class="fabs">
+  <button class="fab" id="locBtn" title="Show my location" aria-label="Show my location">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+  </button>
+  <button class="fab" id="fitBtn" title="Show whole route" aria-label="Show whole route">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+  </button>
+</div>
+
+<script>
+const DATA = {{ data|tojson }};
+const ME = {{ user.username|tojson }};
+const CSRF = {{ csrf_token()|tojson }};
+const URLS = {stop: {{ url_for('stop_detail', stop_id=0)|tojson }}.replace(/0$/, ""),
+              edit: {{ url_for('edit_stop', stop_id=0)|tojson }}.replace(/0\/edit$/, ""),
+              online: {{ url_for('api_online')|tojson }}, beat: {{ url_for('api_heartbeat')|tojson }}};
+const STAGES = {1:{n:"Stage 1",b:"South bank",c:"#0f6e77"}, 2:{n:"Stage 2",b:"North bank",c:"#c8641e"}, 3:{n:"Stage 3",b:"South bank",c:"#7a4fb0"}};
+</script>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

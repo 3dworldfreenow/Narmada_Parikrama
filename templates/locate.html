@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Share your location – Narmada Parikrama{% endblock %}
+{% block body %}
+<main class="auth"><section class="card panel form" style="text-align:center">
+  <div class="locpulse" aria-hidden="true">📍</div>
+  <h1>Share your location</h1>
+  <p class="meta">The guide shows where you are on the parikrama route and which stops are near you.
+    Other pilgrims see only your username and an <b>approximate</b> area (about 1 km), never your exact spot.
+    You can hide yourself from the map in Settings.</p>
+  <p><button class="btn" id="go" style="font-size:16px;padding:12px 22px">Share my location</button></p>
+  <p class="meta" id="msg" role="status"></p>
+  {% if user.role == 'admin' %}<p><button class="linkbtn dark" id="skip">Admin: continue without location</button></p>{% endif %}
+</section></main>
+<script>
+const NEXT = {{ next_url|tojson }}, CSRF = {{ csrf_token()|tojson }};
+const msg = document.getElementById("msg");
+async function send(body){
+  body.append("_csrf", CSRF);
+  const r = await fetch({{ url_for('api_location')|tojson }}, {method:"POST", body, headers:{"X-CSRF-Token": CSRF}});
+  if (r.ok) location.href = NEXT; else msg.textContent = "Could not save your location. Please try again.";
+}
+document.getElementById("go").addEventListener("click", () => {
+  if (!navigator.geolocation) { msg.textContent = "This browser can't share location. Please use Chrome or Safari on your phone."; return; }
+  if (!window.isSecureContext) { msg.textContent = "Location only works on a secure (https://) address. Ask the site admin to enable HTTPS."; }
+  msg.textContent = "Finding you… allow location when your phone asks.";
+  navigator.geolocation.getCurrentPosition(p => {
+    const b = new FormData(); b.append("lat", p.coords.latitude); b.append("lng", p.coords.longitude); b.append("accuracy", p.coords.accuracy);
+    send(b);
+  }, e => {
+    msg.textContent = e.code === 1
+      ? "Location is blocked. Tap the lock icon next to the address bar, allow Location for this site, then try again."
+      : "Couldn't get your location. Turn on GPS/Location and try again.";
+  }, {enableHighAccuracy: true, timeout: 30000, maximumAge: 120000});
+});
+const sk = document.getElementById("skip");
+if (sk) sk.addEventListener("click", () => { const b = new FormData(); b.append("skip", "1"); send(b); });
+</script>
+{% endblock %}

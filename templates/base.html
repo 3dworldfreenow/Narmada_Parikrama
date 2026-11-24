@@ -12,16 +12,18 @@
 <body>
 <nav class="top"><div class="wrap">
   <a class="brand" href="{{ url_for('index') }}">नर्मदे हर · Parikrama Guide</a>
-  <a href="{{ url_for('index') }}">All stops</a>
-  <a href="{{ url_for('map_view') }}">Map</a>
+  {% if user and user.username %}<a href="{{ url_for('index') }}">← Back to map</a>{% endif %}
   <span class="sp"></span>
-  {% if user %}
+  {% if user and user.username %}
     <a href="{{ url_for('my_updates') }}">My updates</a>
+    <a href="{{ url_for('settings') }}">Settings</a>
     {% if user.role == 'admin' %}
       <a href="{{ url_for('admin_queue') }}">Approvals{% if pending_count %}<span class="pill">{{ pending_count }}</span>{% endif %}</a>
       <a href="{{ url_for('admin_users') }}">Users</a>
     {% endif %}
-    <span class="meta" style="color:#cfe">{{ user.name }}{% if user.role == 'super' %} · super user{% elif user.role == 'admin' %} · admin{% endif %}</span>
+    <span class="meta" style="color:#cfe">@{{ user.username }}{% if user.role == 'super' %} · super user{% elif user.role == 'admin' %} · admin{% endif %}</span>
+    <form method="post" action="{{ url_for('logout') }}"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="linkbtn">Log out</button></form>
+  {% elif user %}
     <form method="post" action="{{ url_for('logout') }}"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="linkbtn">Log out</button></form>
   {% else %}
     <a href="{{ url_for('login') }}">Log in</a>
