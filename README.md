@@ -132,6 +132,28 @@ sudo MAXZOOM=13 bash /opt/narmada/deploy/download-map.sh  # smaller file
 
 This cuts the region (Amarkantak to the Gulf of Khambhat) out of the free daily [Protomaps](https://maps.protomaps.com/builds) world map built from OpenStreetMap, using the `pmtiles` tool. It saves one file to `/var/lib/narmada/tiles/narmada.pmtiles` and switches the app over to it. The script prints the file size; each extra zoom level roughly doubles it. Re-run it monthly to refresh the map. To go back to online tiles, remove `MAP_PMTILES` from `/etc/narmada.env` and restart.
 
+## Android app (APK)
+
+GitHub builds the app automatically on every push that touches `android/`, and publishes it under **Releases** as `NarmadaParikrama-1.0.N.apk`.
+
+**Install:** open the latest release on the phone, download the `.apk`, open it, and allow "Install unknown apps" when Android asks. Play Protect may warn because the app isn't from the Play Store; choose "Install anyway". New versions install over old ones and keep your data.
+
+**What works without internet:**
+- the map, once the offline map is downloaded (☰ Menu → Offline map → Download, Wi-Fi recommended; needs `deploy/download-map.sh` on the server first)
+- all 805 stops, search among them, "Near me", and the last downloaded path reports
+- your location on the map, and **journey recording** for My timeline, even with the screen off (shown as a notification)
+- **path reports and stop updates with photos**, saved on the phone and sent automatically when back online ("Offline · N waiting to send")
+
+**Needs internet:** the first login, road directions (offline shows a straight line and distance), searching places outside the stop list, online pilgrims, and the photo gallery.
+
+The app talks to `https://narmada.opirsys.com` by default. Change it on the login screen under "Server". Plain `http://` also works, but use HTTPS when you can.
+
+**Signing:** APKs are signed with `android/narmada-debug.keystore` so every build installs over the previous one. For a private key, add repository secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD`. Phones then need to uninstall the old app once.
+
+## App API (`/api/v1`)
+
+A JSON API with token login, used by the Android app; see the top of `api_v1.py` for every endpoint. Log in with `POST /api/v1/auth/login` (`login`, `password`), then send `Authorization: Bearer <token>`. The same rules as the website apply: GPS checks, admin approval for normal users, and super users publish directly.
+
 ## Settings (environment variables)
 
 | Variable | Purpose |
