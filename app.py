@@ -13,6 +13,7 @@ import json
 import click
 import math
 import struct
+import sys
 import uuid
 import os
 import re
@@ -167,6 +168,12 @@ CREATE TABLE IF NOT EXISTS location_points (      -- each user's private journey
     ts REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_points_user_ts ON location_points(user_id, ts);
+CREATE TABLE IF NOT EXISTS api_tokens (          -- logins of the Android app
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    token_hash TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL, last_used TEXT
+);
 CREATE INDEX IF NOT EXISTS idx_edits_status ON edits(status);
 CREATE INDEX IF NOT EXISTS idx_edits_stop ON edits(stop_id);
 """
@@ -336,7 +343,7 @@ def reset_password_command(who, password):
 
 # ---------------------------------------------------------------- auth helpers
 def current_user():
-    if "user" not in g:
+    if "user" not in g:            # (the app API sets g.user from its token)
         uid = session.get("uid")
         g.user = get_db().execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone() if uid else None
     return g.user
@@ -383,7 +390,7 @@ def csrf_token():
 
 @app.before_request
 def check_csrf():
-    if request.method == "POST":
+    if request.method == "POST" and not request.path.startswith("/api/v1/"):   # the app API uses tokens
         token = request.form.get("_csrf") or request.headers.get("X-CSRF-Token")
         if not token or token != session.get("_csrf"):
             abort(400, "Form expired. Go back, refresh the page and try again.")
@@ -397,7 +404,7 @@ OPEN_ENDPOINTS = {"login", "register", "static", "logout", "choose_username", "l
 def require_login_and_location():
     """The app is for registered pilgrims: log in, pick a username, share location."""
     ep = request.endpoint or ""
-    if ep in OPEN_ENDPOINTS or app.config.get("OPEN_ACCESS"):
+    if ep in OPEN_ENDPOINTS or ep.startswith("api_v1.") or request.path.startswith("/api/v1/") or app.config.get("OPEN_ACCESS"):
         return None
     user = current_user()
     if not user:
@@ -919,28 +926,33 @@ def api_reports():
 
 @app.route("/api/reports", methods=["POST"])
 def api_report_create():
-    user = current_user()
-    f = request.form
+    code, payload = create_report(current_user(), request.form)
+    return payload, code
+
+
+def create_report(user, f):
+    """Validate and save a path report. Used by the website and the app API.
+    Returns (http_status, json_payload)."""
     lat, lng = parse_float(f.get("lat"), -90, 90), parse_float(f.get("lng"), -180, 180)
     kind = f.get("kind", "")
     note = f.get("note", "").strip()[:500]
     mode = f.get("mode", "all") if f.get("mode") in ("walk", "bike", "car", "all") else "all"
     if lat is None or lng is None:
-        return {"error": "Tap the spot on the map you want to report."}, 400
+        return 400, {"error": "Tap the spot on the map you want to report."}
     if kind not in REPORT_KINDS:
-        return {"error": "Choose what kind of report this is."}, 400
+        return 400, {"error": "Choose what kind of report this is."}
     if kind == "other" and len(note) < 3:
-        return {"error": "Please write a short note."}, 400
+        return 400, {"error": "Please write a short note."}
     s_lat, s_lng = parse_float(f.get("my_lat"), -90, 90), parse_float(f.get("my_lng"), -180, 180)
     s_acc = parse_float(f.get("my_acc"), 0, 1e7)
     distance = haversine_km(lat, lng, s_lat, s_lng) if s_lat is not None and s_lng is not None else None
     if user["role"] != "admin" and REQUIRE_GPS:
         if distance is None:
-            return {"error": "We need your current location to accept a path report."}, 400
+            return 400, {"error": "We need your current location to accept a path report."}
         if s_acc is not None and s_acc > GPS_MAX_ACCURACY_M:
-            return {"error": "Your GPS signal is too weak. Step outside and try again."}, 400
+            return 400, {"error": "Your GPS signal is too weak. Step outside and try again."}
         if distance > REPORT_RADIUS_KM:
-            return {"error": f"You are {distance:.1f} km from that spot. You can only report paths within {REPORT_RADIUS_KM:g} km of where you are."}, 400
+            return 400, {"error": f"You are {distance:.1f} km from that spot. You can only report paths within {REPORT_RADIUS_KM:g} km of where you are."}
     auto = user["role"] in ("super", "admin")
     ts = datetime.now(timezone.utc).timestamp()
     get_db().execute(
@@ -950,7 +962,7 @@ def api_report_create():
         (user["id"], lat, lng, kind, note, mode, s_lat, s_lng, s_acc, distance,
          "approved" if auto else "pending", now(), ts, user["id"] if auto else None, now() if auto else None))
     get_db().commit()
-    return {"ok": True, "live": auto,
+    return 200, {"ok": True, "live": auto,
             "message": "Thank you! Your report is on the map." if auto else "Thank you! The admin will check your report before it shows to everyone."}
 
 
@@ -1011,112 +1023,126 @@ def edit_stop(stop_id):
         abort(404)
     user = current_user()
     if request.method == "POST":
-        changes = {}
-        for name in FIELD_NAMES:
-            new = request.form.get(name, "").strip()[:1000]
-            old = stop[name] or ""
-            if new != old:
-                changes[name] = [old, new]
-        note = request.form.get("note", "").strip()[:1000]
-        errors = []
-
-        # --- location check
-        lat = parse_float(request.form.get("lat"), -90, 90)
-        lng = parse_float(request.form.get("lng"), -180, 180)
-        acc = parse_float(request.form.get("accuracy"), 0, 1e6)
-        distance = None
-        gps_needed = REQUIRE_GPS and user["role"] != "admin"
-        if lat is None or lng is None:
-            if gps_needed:
-                errors.append("We could not read your location. Please allow location access and try again.")
-        else:
-            if gps_needed and acc is not None and acc > GPS_MAX_ACCURACY_M:
-                errors.append(f"Your GPS signal is too weak (about {acc:.0f} m). Step outside or wait a moment, then try again.")
-            if stop["lat"] is not None:
-                radius = stop_radius(stop)
-                distance = haversine_km(lat, lng, stop["lat"], stop["lng"])
-                # Only a location confirmed by a visit is strict. An approximate
-                # OpenStreetMap point may be wrong, so the admin decides instead.
-                if gps_needed and stop["loc_src"] == "visit" and distance > radius:
-                    errors.append(f"You seem to be {distance:.1f} km away from {stop['village'] or 'this stop'}. "
-                                  f"Updates can only be sent from within {radius:g} km of the place.")
-
-        # --- photos
-        photos = [f for f in request.files.getlist("photos") if f and f.filename]
-        if len(photos) > MAX_PHOTOS:
-            errors.append(f"Please choose at most {MAX_PHOTOS} photos.")
-        for f in photos:
-            head = f.stream.read(16); f.stream.seek(0)
-            if ext_of(f.filename) not in PHOTO_EXT or not looks_like_image(head):
-                errors.append(f"“{f.filename}” is not a photo (JPG, PNG, WEBP or HEIC).")
-            elif file_size(f) > MAX_PHOTO_MB * 1024 * 1024:
-                errors.append(f"“{f.filename}” is bigger than {MAX_PHOTO_MB} MB.")
-
-        # --- video
-        video = request.files.get("video")
-        video_secs = None
-        if video and video.filename:
-            ext = ext_of(video.filename)
-            if ext not in VIDEO_EXT:
-                errors.append("Video must be MP4, MOV, WEBM or 3GP.")
-            elif file_size(video) > MAX_VIDEO_MB * 1024 * 1024:
-                errors.append(f"Video is bigger than {MAX_VIDEO_MB} MB. Please record a shorter or lower-quality clip.")
-            else:
-                if ext in ("mp4", "mov", "m4v", "3gp"):
-                    video_secs = mp4_duration(video.stream)
-                if video_secs is None:
-                    video_secs = parse_float(request.form.get("video_duration"), 0, 1e6)
-                if video_secs is not None and video_secs > MAX_VIDEO_SECONDS + 1:
-                    errors.append(f"Video is {video_secs:.0f} seconds long. Please keep it to {MAX_VIDEO_SECONDS} seconds or less.")
-        else:
-            video = None
-
-        # --- links
-        links = []
-        for raw in request.form.getlist("links"):
-            url = raw.strip()
-            if not url:
-                continue
-            if not re.match(r"^https?://[^\s<>\"']+\.[^\s<>\"']+$", url) or len(url) > 500:
-                errors.append(f"“{url[:60]}” is not a valid web link (it should start with https://).")
-            else:
-                links.append(url)
-        links = links[:MAX_LINKS]
-
-        if not errors and not changes and not photos and not video and not links:
-            errors.append("You did not change anything or add any photo, video or link.")
+        errors, auto = submit_stop_update(user, stop, request.form, request.files)
         if errors:
             for e in errors:
                 flash(e, "error")
             return render_template("edit.html", stop=stop, fields=FIELDS, form=request.form)
-
-        auto = user["role"] in ("super", "admin")
-        cur = db.execute(
-            """INSERT INTO edits (stop_id, user_id, changes, note, status, created_at, reviewed_by, reviewed_at,
-                                  lat, lng, accuracy, distance_km)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (stop_id, user["id"], json.dumps(changes, ensure_ascii=False), note,
-             "approved" if auto else "pending", now(), user["id"] if auto else None, now() if auto else None,
-             lat, lng, acc, distance))
-        edit_id = cur.lastrowid
-        for f in photos:
-            db.execute("INSERT INTO media (edit_id, stop_id, kind, path, created_at) VALUES (?,?,?,?,?)",
-                       (edit_id, stop_id, "photo", save_photo(f), now()))
-        if video:
-            vname = f"{uuid.uuid4().hex}.{ext_of(video.filename)}"
-            video.save(os.path.join(UPLOAD_DIR, vname))
-            db.execute("INSERT INTO media (edit_id, stop_id, kind, path, duration, created_at) VALUES (?,?,?,?,?,?)",
-                       (edit_id, stop_id, "video", vname, video_secs, now()))
-        for url in links:
-            db.execute("INSERT INTO media (edit_id, stop_id, kind, path, created_at) VALUES (?,?,?,?,?)",
-                       (edit_id, stop_id, "link", url, now()))
-        if auto:
-            apply_edit(db, db.execute("SELECT * FROM edits WHERE id=?", (edit_id,)).fetchone())
-        db.commit()
         flash("Update published. Thank you!" if auto else
               "Thank you! Your update was sent to the admin for approval.", "ok")
         return redirect(url_for("stop_detail", stop_id=stop_id))
     return render_template("edit.html", stop=stop, fields=FIELDS, form={})
+
+
+def submit_stop_update(user, stop, form, files, partial=False):
+    """Validate and save a stop update (fields, GPS, photos, video, links).
+    Used by the website and by the app API. Returns (errors, published_now).
+    partial=True: only fields present in the form count as changes (app API)."""
+    db = get_db()
+    stop_id = stop["id"]
+    changes = {}
+    for name in FIELD_NAMES:
+        if partial and name not in form:
+            continue
+        new = form.get(name, "").strip()[:1000]
+        old = stop[name] or ""
+        if new != old:
+            changes[name] = [old, new]
+    note = form.get("note", "").strip()[:1000]
+    errors = []
+
+    # --- location check
+    lat = parse_float(form.get("lat"), -90, 90)
+    lng = parse_float(form.get("lng"), -180, 180)
+    acc = parse_float(form.get("accuracy"), 0, 1e6)
+    distance = None
+    gps_needed = REQUIRE_GPS and user["role"] != "admin"
+    if lat is None or lng is None:
+        if gps_needed:
+            errors.append("We could not read your location. Please allow location access and try again.")
+    else:
+        if gps_needed and acc is not None and acc > GPS_MAX_ACCURACY_M:
+            errors.append(f"Your GPS signal is too weak (about {acc:.0f} m). Step outside or wait a moment, then try again.")
+        if stop["lat"] is not None:
+            radius = stop_radius(stop)
+            distance = haversine_km(lat, lng, stop["lat"], stop["lng"])
+            # Only a location confirmed by a visit is strict. An approximate
+            # OpenStreetMap point may be wrong, so the admin decides instead.
+            if gps_needed and stop["loc_src"] == "visit" and distance > radius:
+                errors.append(f"You seem to be {distance:.1f} km away from {stop['village'] or 'this stop'}. "
+                              f"Updates can only be sent from within {radius:g} km of the place.")
+
+    # --- photos
+    photos = [f for f in files.getlist("photos") if f and f.filename]
+    if len(photos) > MAX_PHOTOS:
+        errors.append(f"Please choose at most {MAX_PHOTOS} photos.")
+    for f in photos:
+        head = f.stream.read(16); f.stream.seek(0)
+        if ext_of(f.filename) not in PHOTO_EXT or not looks_like_image(head):
+            errors.append(f"“{f.filename}” is not a photo (JPG, PNG, WEBP or HEIC).")
+        elif file_size(f) > MAX_PHOTO_MB * 1024 * 1024:
+            errors.append(f"“{f.filename}” is bigger than {MAX_PHOTO_MB} MB.")
+
+    # --- video
+    video = files.get("video")
+    video_secs = None
+    if video and video.filename:
+        ext = ext_of(video.filename)
+        if ext not in VIDEO_EXT:
+            errors.append("Video must be MP4, MOV, WEBM or 3GP.")
+        elif file_size(video) > MAX_VIDEO_MB * 1024 * 1024:
+            errors.append(f"Video is bigger than {MAX_VIDEO_MB} MB. Please record a shorter or lower-quality clip.")
+        else:
+            if ext in ("mp4", "mov", "m4v", "3gp"):
+                video_secs = mp4_duration(video.stream)
+            if video_secs is None:
+                video_secs = parse_float(form.get("video_duration"), 0, 1e6)
+            if video_secs is not None and video_secs > MAX_VIDEO_SECONDS + 1:
+                errors.append(f"Video is {video_secs:.0f} seconds long. Please keep it to {MAX_VIDEO_SECONDS} seconds or less.")
+    else:
+        video = None
+
+    # --- links
+    links = []
+    for raw in form.getlist("links"):
+        url = raw.strip()
+        if not url:
+            continue
+        if not re.match(r"^https?://[^\s<>\"']+\.[^\s<>\"']+$", url) or len(url) > 500:
+            errors.append(f"“{url[:60]}” is not a valid web link (it should start with https://).")
+        else:
+            links.append(url)
+    links = links[:MAX_LINKS]
+
+    if not errors and not changes and not photos and not video and not links:
+        errors.append("You did not change anything or add any photo, video or link.")
+    if errors:
+        return errors, False
+
+    auto = user["role"] in ("super", "admin")
+    cur = db.execute(
+        """INSERT INTO edits (stop_id, user_id, changes, note, status, created_at, reviewed_by, reviewed_at,
+                              lat, lng, accuracy, distance_km)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (stop_id, user["id"], json.dumps(changes, ensure_ascii=False), note,
+         "approved" if auto else "pending", now(), user["id"] if auto else None, now() if auto else None,
+         lat, lng, acc, distance))
+    edit_id = cur.lastrowid
+    for f in photos:
+        db.execute("INSERT INTO media (edit_id, stop_id, kind, path, created_at) VALUES (?,?,?,?,?)",
+                   (edit_id, stop_id, "photo", save_photo(f), now()))
+    if video:
+        vname = f"{uuid.uuid4().hex}.{ext_of(video.filename)}"
+        video.save(os.path.join(UPLOAD_DIR, vname))
+        db.execute("INSERT INTO media (edit_id, stop_id, kind, path, duration, created_at) VALUES (?,?,?,?,?,?)",
+                   (edit_id, stop_id, "video", vname, video_secs, now()))
+    for url in links:
+        db.execute("INSERT INTO media (edit_id, stop_id, kind, path, created_at) VALUES (?,?,?,?,?)",
+                   (edit_id, stop_id, "link", url, now()))
+    if auto:
+        apply_edit(db, db.execute("SELECT * FROM edits WHERE id=?", (edit_id,)).fetchone())
+    db.commit()
+    return [], auto
 
 
 def apply_edit(db, edit):
@@ -1232,6 +1258,9 @@ def not_found(_e):
 
 
 init_db()
+
+import api_v1  # noqa: E402  (JSON API for the Android app)
+app.register_blueprint(api_v1.create_blueprint(sys.modules[__name__]))
 
 if __name__ == "__main__":
     app.run(debug=os.environ.get("FLASK_DEBUG") == "1", port=int(os.environ.get("PORT", 5000)))
