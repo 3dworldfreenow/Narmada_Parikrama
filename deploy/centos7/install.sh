@@ -32,7 +32,7 @@ if ! yum -q makecache fast >/dev/null 2>&1; then
 fi
 
 say "Installing system packages"
-yum install -y -q git curl tar sqlite policycoreutils-python
+yum install -y -q git curl tar sqlite sudo policycoreutils-python
 
 # nginx from nginx.org (CentOS 7's own repos don't include it)
 if ! command -v nginx >/dev/null; then
@@ -63,7 +63,7 @@ UV=/usr/local/bin/uv; [ -x "$UV" ] || UV="$(command -v uv)"
 # ---------------------------------------------------------------- 3. code + Python
 say "Getting the code into $APP_DIR"
 if [ -d "$APP_DIR/.git" ]; then
-  git -C "$APP_DIR" pull --ff-only
+  (cd "$APP_DIR" && git pull --ff-only)
 else
   git clone --depth 1 "$REPO" "$APP_DIR"
 fi
