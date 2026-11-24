@@ -1,0 +1,15 @@
+[project]
+name = "narmada-parikrama"
+version = "1.0.0"
+description = "Village-by-village Narmada Parikrama guide with community updates"
+readme = "README.md"
+requires-python = ">=3.10,<3.14"
+dependencies = [
+    "flask>=3.0,<4",
+    # Pillow 11.x still ships manylinux2014 (glibc 2.17) wheels, needed for CentOS 7.
+    "pillow>=10.4,<12",
+    "gunicorn>=22,<24",
+]
+
+[tool.uv]
+package = false

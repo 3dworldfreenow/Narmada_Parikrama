@@ -1,0 +1,18 @@
+[Unit]
+Description=Narmada Parikrama guide (gunicorn)
+After=network.target
+
+[Service]
+User=narmada
+Group=narmada
+WorkingDirectory=/opt/narmada
+EnvironmentFile=/etc/narmada.env
+# 2 workers is plenty for a small site using SQLite; long timeout for video uploads.
+ExecStart=/opt/narmada/.venv/bin/gunicorn app:app --workers 2 --bind 127.0.0.1:8000 --timeout 300 --access-logfile -
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

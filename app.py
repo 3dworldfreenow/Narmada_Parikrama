@@ -47,6 +47,12 @@ app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+if os.environ.get("BEHIND_PROXY") == "1":
+    # Running behind nginx: trust its X-Forwarded-* headers for client IP and https.
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+if os.environ.get("HTTPS") == "1":
+    app.config["SESSION_COOKIE_SECURE"] = True
 app.config["MAX_CONTENT_LENGTH"] = (MAX_PHOTOS * MAX_PHOTO_MB + MAX_VIDEO_MB + 5) * 1024 * 1024
 
 STAGES = {

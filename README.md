@@ -33,8 +33,8 @@ An English, searchable guide to the full Narmada Parikrama (about 2,934 km, 805 
 ## Run on your computer
 
 ```bash
-pip install -r requirements.txt
-python app.py
+uv run app.py            # with uv (installs Python + packages automatically)
+# or: pip install -r requirements.txt && python app.py
 ```
 
 Open http://127.0.0.1:5000. The database is created automatically in `instance/narmada.db` and filled from `data/stops.json`.
@@ -42,6 +42,23 @@ Open http://127.0.0.1:5000. The database is created automatically in `instance/n
 ## Put it online
 
 GitHub stores the code, but it cannot run a Python/Flask app. Use one of these:
+
+### Option 0 – Your own CentOS 7 server (uv + gunicorn + nginx)
+
+One script installs everything. It sets up uv with Python 3.12, gunicorn under systemd, nginx, firewall and SELinux settings, and optionally free HTTPS:
+
+```bash
+yum install -y git      # if not installed
+git clone https://github.com/3dworldfreenow/Narmada_Parikrama.git /opt/narmada
+sudo DOMAIN=parikrama.example.com EMAIL=you@example.com bash /opt/narmada/deploy/centos7/install.sh
+```
+
+- Point your domain's DNS **A record** at the server before running, so HTTPS can be issued. Without `DOMAIN`/`EMAIL` the site runs on `http://SERVER-IP`, but phones won't share GPS without HTTPS.
+- Data lives in `/var/lib/narmada` (database and uploads). Settings, including the secret key, are in `/etc/narmada.env`.
+- **Update later:** `sudo bash /opt/narmada/deploy/centos7/update.sh`
+- **Daily backup:** add `15 2 * * * bash /opt/narmada/deploy/centos7/backup.sh` to root's crontab.
+- **Logs:** `journalctl -u narmada -f`
+- CentOS 7 reached end of life in June 2024 and no longer gets security updates. The script points yum at `vault.centos.org` so packages still install. Plan a move to Rocky/AlmaLinux 9 when you can; the same steps work there with small changes.
 
 ### Option A – PythonAnywhere (free, recommended)
 
