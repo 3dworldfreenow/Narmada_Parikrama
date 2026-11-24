@@ -55,6 +55,7 @@ sudo DOMAIN=parikrama.example.com EMAIL=you@example.com bash /opt/narmada/deploy
 
 - Point your domain's DNS **A record** at the server before running, so HTTPS can be issued. Without `DOMAIN`/`EMAIL` the site runs on `http://SERVER-IP`, but phones won't share GPS without HTTPS.
 - Data lives in `/var/lib/narmada` (database and uploads). Settings, including the secret key, are in `/etc/narmada.env`.
+- **Apache already running?** If the server already hosts websites with Apache (httpd), the installer adds the site to Apache instead of starting nginx, using `deploy/centos7/setup-apache.sh`. Other sites are not touched.
 - **Update later:** `sudo bash /opt/narmada/deploy/centos7/update.sh`
 - **Daily backup:** add `15 2 * * * bash /opt/narmada/deploy/centos7/backup.sh` to root's crontab.
 - **Logs:** `journalctl -u narmada -f`

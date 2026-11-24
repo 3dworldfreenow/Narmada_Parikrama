@@ -101,7 +101,18 @@ systemctl daemon-reload
 systemctl enable narmada >/dev/null
 systemctl restart narmada
 
-# ---------------------------------------------------------------- 6. nginx
+# ---------------------------------------------------------------- 6. web server
+# If Apache already serves other websites on this machine, add the site to
+# Apache instead of starting nginx (both can't use port 80).
+if systemctl is-active --quiet httpd; then
+  say "Apache is already running here – adding the site to Apache instead of nginx"
+  if [ -n "$DOMAIN" ]; then
+    DOMAIN="$DOMAIN" EMAIL="$EMAIL" bash "$APP_DIR/deploy/centos7/setup-apache.sh"
+  else
+    echo "Run: DOMAIN=your.domain EMAIL=you@example.com bash $APP_DIR/deploy/centos7/setup-apache.sh"
+  fi
+  exit 0
+fi
 say "Configuring nginx"
 SERVER_NAME="${DOMAIN:-_}"
 sed "s|__SERVER_NAME__|$SERVER_NAME|g; s|__APP_DIR__|$APP_DIR|g" \
