@@ -118,6 +118,17 @@ Matching uses both the English and Marathi names, and checks that neighbouring s
 
 Search data © OpenStreetMap contributors (ODbL), via Photon by Komoot.
 
+## Map stored on your own server (optional, recommended)
+
+By default the app shows map images from OpenStreetMap's free tile servers, which only allow light use and forbid bulk downloading. To serve the map from your own server instead (no outside tile server, no API key), download the Narmada region once:
+
+```bash
+sudo bash /opt/narmada/deploy/download-map.sh             # zoom up to 14
+sudo MAXZOOM=13 bash /opt/narmada/deploy/download-map.sh  # smaller file
+```
+
+This cuts the region (Amarkantak to the Gulf of Khambhat) out of the free daily [Protomaps](https://maps.protomaps.com/builds) world map built from OpenStreetMap, using the `pmtiles` tool. It saves one file to `/var/lib/narmada/tiles/narmada.pmtiles` and switches the app over to it. The script prints the file size; each extra zoom level roughly doubles it. Re-run it monthly to refresh the map. To go back to online tiles, remove `MAP_PMTILES` from `/etc/narmada.env` and restart.
+
 ## Settings (environment variables)
 
 | Variable | Purpose |
@@ -125,6 +136,7 @@ Search data © OpenStreetMap contributors (ODbL), via Photon by Komoot.
 | `SECRET_KEY` | **Required in production.** A long random string that keeps logins secure. |
 | `DATABASE_PATH` | Where the SQLite file lives (default `instance/narmada.db`). |
 | `ADMIN_EMAILS` | Optional. Emails that become admin when they register. |
+| `MAP_PMTILES` / `MAP_MAXZOOM` | Set by `download-map.sh`: the map file on this server and its highest zoom level. |
 | `UPLOAD_DIR` | Where photos and videos are stored (default `instance/uploads`). |
 | `GPS_RADIUS_KM` | How close a user must be to a stop with a confirmed location (default `3`). |
 | `OSM_RADIUS_KM` | Distance from an approximate OpenStreetMap pin beyond which the admin is warned (default `5`). |

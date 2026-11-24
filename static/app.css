@@ -134,3 +134,6 @@ mark{background:#ffe08a;color:#1f2a2e;border-radius:3px}
 }
 .searchbox{min-width:0}
 .usermenu,.brand{flex-shrink:0}
+.zoomgrp{display:flex;flex-direction:column;border-radius:999px;box-shadow:var(--shadow);overflow:hidden;margin-bottom:4px}
+.zoomgrp .fab{border-radius:0;box-shadow:none;font-size:24px;font-weight:500;line-height:1}
+.zoomgrp .fab+.fab{border-top:1px solid var(--line)}

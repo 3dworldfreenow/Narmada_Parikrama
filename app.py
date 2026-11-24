@@ -36,6 +36,9 @@ GPS_MAX_ACCURACY_M = float(os.environ.get("GPS_MAX_ACCURACY_M", "1000"))
 REQUIRE_GPS = os.environ.get("REQUIRE_GPS", "1") != "0"
 ONLINE_MINUTES = int(os.environ.get("ONLINE_MINUTES", "5"))      # "online" = seen in the last N minutes
 LOCATION_MAX_AGE_H = float(os.environ.get("LOCATION_MAX_AGE_H", "12"))  # ask for location again after N hours
+# Optional: map file downloaded by deploy/download-map.sh (served from this server).
+MAP_PMTILES = os.environ.get("MAP_PMTILES", "")
+MAP_MAXZOOM = int(os.environ.get("MAP_MAXZOOM", "14"))
 MAX_PHOTOS = 6
 MAX_PHOTO_MB = 10
 MAX_VIDEO_MB = 60
@@ -463,7 +466,8 @@ def index():
         """SELECT e.*, COALESCE(u.username, u.name) AS user_name, s.village, s.stage FROM edits e
            JOIN users u ON u.id=e.user_id JOIN stops s ON s.id=e.stop_id
            WHERE e.status='approved' ORDER BY e.reviewed_at DESC, e.id DESC LIMIT 8""").fetchall()
-    return render_template("app.html", data=data, recent=recent)
+    local_map = bool(MAP_PMTILES and os.path.isfile(MAP_PMTILES))
+    return render_template("app.html", data=data, recent=recent, local_map=local_map, map_maxzoom=MAP_MAXZOOM)
 
 
 @app.route("/map")
@@ -492,6 +496,17 @@ def stop_detail(stop_id):
     mine_media = media_for("edit_id IN (%s)" % ",".join("?" * len(mine)), [e["id"] for e in mine]) if mine else {}
     return render_template("stop.html", stop=stop, fields=FIELDS, history=decode(history),
                            mine=decode(mine), gallery=gallery, mine_media=mine_media)
+
+
+@app.route("/tiles/narmada.pmtiles")
+def map_tiles():
+    """The offline map file. Browsers read small pieces of it (HTTP Range requests)."""
+    if not (MAP_PMTILES and os.path.isfile(MAP_PMTILES)):
+        abort(404)
+    from flask import send_file
+    resp = send_file(MAP_PMTILES, mimetype="application/octet-stream", conditional=True, max_age=86400)
+    resp.headers["Accept-Ranges"] = "bytes"
+    return resp
 
 
 @app.route("/media/<int:media_id>")

@@ -13,11 +13,15 @@
 
   // ------------------------------------------------------------ map
   const map = L.map("map", {zoomControl: false, attributionControl: true, preferCanvas: true}).setView([22.4, 77.5], 7);
-  // Standard OpenStreetMap tiles: free, no API key (attribution required).
-  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-  }).addTo(map);
+  const OSM_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+  if (LOCAL_MAP && window.protomapsL) {
+    // Map file stored on our own server (deploy/download-map.sh) – no outside tile server needed.
+    protomapsL.leafletLayer({url: LOCAL_MAP, flavor: "light", lang: "en", maxDataZoom: LOCAL_MAXZOOM,
+      attribution: OSM_ATTR + ' &copy; <a href="https://protomaps.com">Protomaps</a>'}).addTo(map);
+  } else {
+    // Standard OpenStreetMap tiles: free, no API key (attribution required).
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 19, attribution: OSM_ATTR}).addTo(map);
+  }
 
   const routeLines = L.layerGroup().addTo(map);
   const stopLayer = L.layerGroup().addTo(map);
@@ -218,6 +222,8 @@
     $("#stopsTab").hidden = tab !== "stops"; $("#onlineTab").hidden = tab !== "online"; if (tab === "online") loadOnline();
   });
   $("#locBtn").onclick = () => withMyPos(p => map.flyTo(p, 13));
+  $("#zIn").onclick = () => map.zoomIn();
+  $("#zOut").onclick = () => map.zoomOut();
   function fitVisible() { const pts = DATA.filter(o => matches(o) && o.lat != null).map(o => [o.lat, o.lng]); if (pts.length) map.fitBounds(pts, {padding: [40, 40]}); }
   $("#fitBtn").onclick = () => { roadLayer.clearLayers(); fitVisible(); };
 
