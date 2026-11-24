@@ -27,7 +27,8 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - uses: android-actions/setup-android@v3
+      - name: Android SDK (already on GitHub's Ubuntu runners)
+        run: echo "ANDROID_HOME=$ANDROID_HOME" && ls "$ANDROID_HOME"
 
       - name: Prepare app files (styles, stops data, map libraries)
         run: |
