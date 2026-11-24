@@ -147,7 +147,14 @@ This cuts the region (Amarkantak to the Gulf of Khambhat) out of the free daily 
 
 **Storage.** Videos take space: 100 one-minute videos can use 3–5 GB. PythonAnywhere's free plan has 512 MB, so you may need a paid plan or a lower `MAX_VIDEO_MB` in `app.py` as uploads grow.
 
-Make an existing account admin from the command line with `flask --app app make-admin`.
+### Managing accounts from the command line (on the server)
+
+```bash
+sudo bash /opt/narmada/deploy/admin.sh create              # create a new admin (asks name, email, mobile, password)
+sudo bash /opt/narmada/deploy/admin.sh promote ram_bhakt   # make an existing user admin (username or email)
+sudo bash /opt/narmada/deploy/admin.sh list                # list all accounts and roles
+sudo bash /opt/narmada/deploy/admin.sh password ram_bhakt  # set a new password for someone
+```
 
 ## Credit and source
 

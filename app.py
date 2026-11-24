@@ -9,6 +9,8 @@ is checked against the stop's location. Updates can carry photos, one short
 video (max 60 s) and links (YouTube etc.).
 """
 import json
+
+import click
 import math
 import struct
 import uuid
@@ -224,14 +226,77 @@ def apply_locations_command():
     print(f"{n} stops now have an OpenStreetMap location.")
 
 
-@app.cli.command("make-admin")
-def make_admin_command():
-    """Usage: flask make-admin  (asks for the email of an existing account)."""
-    email = input("Email of the account to make admin: ").strip().lower()
+@app.cli.command("create-admin")
+@click.option("--username", prompt="Username (3-20: a-z 0-9 _ .)")
+@click.option("--name", prompt="Full name")
+@click.option("--email", prompt="Email")
+@click.option("--mobile", prompt="Mobile (10 digits)")
+@click.option("--password", prompt="Password (min 6)", hide_input=True, confirmation_prompt=True)
+def create_admin_command(username, name, email, mobile, password):
+    """Create a new admin account from the command line."""
+    username, email, mobile = username.strip().lower().lstrip("@"), email.strip().lower(), mobile.replace(" ", "")
+    errors = []
+    if not USERNAME_RE.match(username):
+        errors.append("Username must be 3-20 characters: small letters, numbers, _ or .")
+    if len(name.strip()) < 2:
+        errors.append("Please give a full name.")
+    if not EMAIL_RE.match(email):
+        errors.append("Email is not valid.")
+    if not MOBILE_RE.match(mobile):
+        errors.append("Mobile must be a valid 10-digit Indian number.")
+    if len(password) < 6:
+        errors.append("Password must be at least 6 characters.")
     db = sqlite3.connect(DATABASE)
-    cur = db.execute("UPDATE users SET role='admin' WHERE email=?", (email,))
+    if db.execute("SELECT 1 FROM users WHERE username=? COLLATE NOCASE", (username,)).fetchone():
+        errors.append(f"Username @{username} is taken. To make that user admin: flask --app app make-admin {username}")
+    if db.execute("SELECT 1 FROM users WHERE email=?", (email,)).fetchone():
+        errors.append(f"Email {email} already has an account. To make it admin: flask --app app make-admin {email}")
+    if errors:
+        for e in errors:
+            click.echo("✗ " + e, err=True)
+        raise SystemExit(1)
+    db.execute("""INSERT INTO users (username, name, email, mobile, password_hash, role, created_at)
+                  VALUES (?,?,?,?,?,'admin',?)""",
+               (username, name.strip(), email, mobile, generate_password_hash(password), now()))
     db.commit()
-    print("Done." if cur.rowcount else "No account with that email. Register first.")
+    click.echo(f"✓ Admin @{username} created. Log in with {username} or {email}.")
+
+
+@app.cli.command("make-admin")
+@click.argument("who", required=False)
+def make_admin_command(who):
+    """Make an existing account admin:  flask --app app make-admin USERNAME_OR_EMAIL"""
+    who = (who or click.prompt("Username or email of the account")).strip().lower().lstrip("@")
+    db = sqlite3.connect(DATABASE)
+    cur = db.execute("UPDATE users SET role='admin' WHERE email=? OR username=? COLLATE NOCASE", (who, who))
+    db.commit()
+    click.echo(f"✓ {who} is now an admin." if cur.rowcount else f"✗ No account found for {who}.")
+
+
+@app.cli.command("list-users")
+def list_users_command():
+    """Show all accounts and their roles."""
+    db = sqlite3.connect(DATABASE)
+    rows = db.execute("SELECT username, name, email, mobile, role FROM users ORDER BY id").fetchall()
+    for u in rows:
+        click.echo(f"@{u[0] or '-':20} {u[4]:6} {u[1]:25} {u[2]:30} {u[3]}")
+    click.echo(f"{len(rows)} account(s)")
+
+
+@app.cli.command("reset-password")
+@click.argument("who")
+@click.option("--password", prompt="New password (min 6)", hide_input=True, confirmation_prompt=True)
+def reset_password_command(who, password):
+    """Set a new password for an account:  flask --app app reset-password USERNAME_OR_EMAIL"""
+    if len(password) < 6:
+        click.echo("✗ Password must be at least 6 characters.", err=True)
+        raise SystemExit(1)
+    who = who.strip().lower().lstrip("@")
+    db = sqlite3.connect(DATABASE)
+    cur = db.execute("UPDATE users SET password_hash=? WHERE email=? OR username=? COLLATE NOCASE",
+                     (generate_password_hash(password), who, who))
+    db.commit()
+    click.echo(f"✓ Password changed for {who}." if cur.rowcount else f"✗ No account found for {who}.")
 
 
 # ---------------------------------------------------------------- auth helpers
