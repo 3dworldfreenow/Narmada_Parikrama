@@ -1,0 +1,9 @@
+.gradle/
+build/
+local.properties
+app/build/
+app/src/main/assets/www/lib/
+app/src/main/assets/www/app.css
+app/src/main/assets/www/seed-stops.js
+*.iml
+.idea/
