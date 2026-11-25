@@ -100,9 +100,9 @@
      "note": "",
      "state": "MP",
      "q": "Mohipura",
-     "lat": 22.07226,
-     "lng": 75.10894,
-     "geo": "osm"
+     "lat": null,
+     "lng": null,
+     "geo": null
     },
     {
      "n": "Datwada",
@@ -124,9 +124,9 @@
      "note": "",
      "state": "MP",
      "q": "Chhota Barda",
-     "lat": 22.0814,
-     "lng": 75.05407,
-     "geo": "osm"
+     "lat": null,
+     "lng": null,
+     "geo": null
     },
     {
      "n": "Dahi Bayda",
@@ -184,9 +184,9 @@
      "note": "",
      "state": "MH",
      "q": "Brahmanpuri",
-     "lat": null,
-     "lng": null,
-     "geo": null
+     "lat": 21.62013,
+     "lng": 74.52065,
+     "geo": "osm2"
     },
     {
      "n": "Vagvadev",
@@ -232,9 +232,9 @@
      "note": "",
      "state": "GJ",
      "q": "Dumkhal",
-     "lat": 21.73054,
-     "lng": 73.69802,
-     "geo": "osm"
+     "lat": null,
+     "lng": null,
+     "geo": null
     },
     {
      "n": "Dediapada",
@@ -304,9 +304,9 @@
      "note": "",
      "state": "GJ",
      "q": "Sisodara",
-     "lat": 21.91065,
-     "lng": 73.35344,
-     "geo": "osm"
+     "lat": 21.91113,
+     "lng": 73.35218,
+     "geo": "osm2"
     },
     {
      "n": "Ori",
@@ -483,9 +483,9 @@
      "note": "Kabirvad",
      "state": "GJ",
      "q": "Shuklatirth",
-     "lat": 21.75306,
-     "lng": 73.12115,
-     "geo": "osm"
+     "lat": null,
+     "lng": null,
+     "geo": null
     },
     {
      "n": "Moti Koral",
@@ -615,9 +615,9 @@
      "note": "",
      "state": "GJ",
      "q": "Tilakwada",
-     "lat": 21.96452,
-     "lng": 73.6288,
-     "geo": "osm"
+     "lat": 21.95264,
+     "lng": 73.59056,
+     "geo": "osm2"
     },
     {
      "n": "Garudeshwar",
@@ -675,9 +675,9 @@
      "note": "",
      "state": "MP",
      "q": "Bakhatgarh",
-     "lat": 22.05017,
-     "lng": 74.1513,
-     "geo": "osm"
+     "lat": null,
+     "lng": null,
+     "geo": null
     },
     {
      "n": "Chhaktala",
@@ -687,9 +687,9 @@
      "note": "",
      "state": "MP",
      "q": "Chhaktala",
-     "lat": 22.10255,
-     "lng": 74.18284,
-     "geo": "osm"
+     "lat": null,
+     "lng": null,
+     "geo": null
     },
     {
      "n": "Kawada",
@@ -735,9 +735,9 @@
      "note": "",
      "state": "MP",
      "q": "Susari",
-     "lat": 22.18698,
-     "lng": 74.74197,
-     "geo": "osm"
+     "lat": null,
+     "lng": null,
+     "geo": null
     },
     {
      "n": "Nisarpur",
@@ -771,9 +771,9 @@
      "note": "",
      "state": "MP",
      "q": "Semalda",
-     "lat": 22.10834,
-     "lng": 75.05414,
-     "geo": "osm"
+     "lat": null,
+     "lng": null,
+     "geo": null
     },
     {
      "n": "Badgaon Khedi",
@@ -795,9 +795,9 @@
      "note": "",
      "state": "MP",
      "q": "Ajanda",
-     "lat": 22.13263,
-     "lng": 75.12145,
-     "geo": "osm"
+     "lat": null,
+     "lng": null,
+     "geo": null
     },
     {
      "n": "Bakaner",
@@ -807,9 +807,9 @@
      "note": "",
      "state": "MP",
      "q": "Bakaner",
-     "lat": 22.18453,
-     "lng": 75.15259,
-     "geo": "osm"
+     "lat": null,
+     "lng": null,
+     "geo": null
     },
     {
      "n": "Dharampuri",
@@ -819,9 +819,9 @@
      "note": "",
      "state": "MP",
      "q": "Dharampuri",
-     "lat": 22.15248,
-     "lng": 75.34976,
-     "geo": "osm"
+     "lat": 22.14926,
+     "lng": 75.34315,
+     "geo": "osm2"
     },
     {
      "n": "Mandu (Rewa Kund)",
@@ -891,9 +891,9 @@
      "note": "",
      "state": "MP",
      "q": "Khedighat",
-     "lat": null,
-     "lng": null,
-     "geo": null
+     "lat": 22.22177,
+     "lng": 76.04611,
+     "geo": "osm2"
     },
     {
      "n": "Charukeshwar",
@@ -915,9 +915,9 @@
      "note": "",
      "state": "MP",
      "q": "Katkut",
-     "lat": 22.41932,
-     "lng": 76.10797,
-     "geo": "osm"
+     "lat": null,
+     "lng": null,
+     "geo": null
     },
     {
      "n": "Udaynagar",
@@ -927,9 +927,9 @@
      "note": "",
      "state": "MP",
      "q": "Udaynagar",
-     "lat": 22.49174,
-     "lng": 76.26554,
-     "geo": "osm"
+     "lat": 22.53955,
+     "lng": 76.20461,
+     "geo": "osm2"
     },
     {
      "n": "Sitavan, Pipri",
@@ -951,9 +951,9 @@
      "note": "Forest road",
      "state": "MP",
      "q": "Ratanpur",
-     "lat": 22.38458,
-     "lng": 76.35785,
-     "geo": "osm"
+     "lat": 22.38519,
+     "lng": 76.36297,
+     "geo": "osm2"
     },
     {
      "n": "Jayanti Mata Falls",
@@ -1023,9 +1023,9 @@
      "note": "Bagdi river confluence",
      "state": "MP",
      "q": "Dawta",
-     "lat": null,
-     "lng": null,
-     "geo": null
+     "lat": 22.49601,
+     "lng": 76.89817,
+     "geo": "osm2"
     },
     {
      "n": "Nemawar",
@@ -1119,9 +1119,9 @@
      "note": "",
      "state": "MP",
      "q": "Dehri",
-     "lat": 22.82515,
-     "lng": 78.01078,
-     "geo": "osm"
+     "lat": 22.8216,
+     "lng": 78.01129,
+     "geo": "osm2"
     },
     {
      "n": "Baktara",
@@ -1131,9 +1131,9 @@
      "note": "",
      "state": "MP",
      "q": "Baktara",
-     "lat": null,
-     "lng": null,
-     "geo": null
+     "lat": 22.9059,
+     "lng": 78.01402,
+     "geo": "osm2"
     },
     {
      "n": "Badi",
@@ -1155,9 +1155,9 @@
      "note": "",
      "state": "MP",
      "q": "Bareli",
-     "lat": 23.00082,
-     "lng": 78.2351,
-     "geo": "osm"
+     "lat": 23.00433,
+     "lng": 78.23062,
+     "geo": "osm2"
     },
     {
      "n": "Satrawan",
@@ -1275,9 +1275,9 @@
      "note": "Chhota Dhuandhar falls",
      "state": "MP",
      "q": "Gurshi",
-     "lat": null,
-     "lng": null,
-     "geo": null
+     "lat": 23.05844,
+     "lng": 79.10176,
+     "geo": "osm2"
     },
     {
      "n": "Bildha",
@@ -1287,9 +1287,9 @@
      "note": "",
      "state": "MP",
      "q": "Bildha",
-     "lat": 23.10276,
-     "lng": 79.2294,
-     "geo": "osm"
+     "lat": null,
+     "lng": null,
+     "geo": null
     },
     {
      "n": "Vikramnagar",
@@ -1323,9 +1323,9 @@
      "note": "",
      "state": "MP",
      "q": "Shahpura",
-     "lat": null,
-     "lng": null,
-     "geo": null
+     "lat": 23.1361,
+     "lng": 79.66401,
+     "geo": "osm2"
     },
     {
      "n": "Saraswati Ghat",
@@ -1407,9 +1407,9 @@
      "note": "",
      "state": "MP",
      "q": "Dobhi",
-     "lat": 23.05206,
-     "lng": 80.0695,
-     "geo": "osm"
+     "lat": null,
+     "lng": null,
+     "geo": null
     },
     {
      "n": "Bijadandi",
@@ -1419,9 +1419,9 @@
      "note": "",
      "state": "MP",
      "q": "Bijadandi",
-     "lat": 22.98657,
-     "lng": 80.14807,
-     "geo": "osm"
+     "lat": null,
+     "lng": null,
+     "geo": null
     },
     {
      "n": "Kumha",
@@ -1431,9 +1431,9 @@
      "note": "",
      "state": "MP",
      "q": "Kumha",
-     "lat": 22.80559,
-     "lng": 80.26555,
-     "geo": "osm"
+     "lat": null,
+     "lng": null,
+     "geo": null
     },
     {
      "n": "Chirai",
@@ -1467,9 +1467,9 @@
      "note": "",
      "state": "MP",
      "q": "Mandla",
-     "lat": null,
-     "lng": null,
-     "geo": null
+     "lat": 22.59781,
+     "lng": 80.37208,
+     "geo": "osm2"
     },
     {
      "n": "Badi Khairi",
@@ -1503,9 +1503,9 @@
      "note": "",
      "state": "MP",
      "q": "Kindri",
-     "lat": 22.66428,
-     "lng": 80.46143,
-     "geo": "osm"
+     "lat": null,
+     "lng": null,
+     "geo": null
     },
     {
      "n": "Paundi Linga",
@@ -1527,9 +1527,9 @@
      "note": "Via Chhota Umaria",
      "state": "MP",
      "q": "Niwas",
-     "lat": 23.04592,
-     "lng": 80.44263,
-     "geo": "osm"
+     "lat": null,
+     "lng": null,
+     "geo": null
     },
     {
      "n": "Bijhouli Fossil Park",
@@ -1539,9 +1539,9 @@
      "note": "",
      "state": "MP",
      "q": "Ghughwa Fossil Park",
-     "lat": null,
-     "lng": null,
-     "geo": null
+     "lat": 23.11308,
+     "lng": 80.61409,
+     "geo": "osm2"
     },
     {
      "n": "Shahpura (Dindori)",
@@ -1563,9 +1563,9 @@
      "note": "",
      "state": "MP",
      "q": "Mali",
-     "lat": 23.37832,
-     "lng": 80.71142,
-     "geo": "osm"
+     "lat": null,
+     "lng": null,
+     "geo": null
     },
     {
      "n": "Umaria",
@@ -1599,9 +1599,9 @@
      "note": "",
      "state": "MP",
      "q": "Rajendragram",
-     "lat": 22.93698,
-     "lng": 81.60538,
-     "geo": "osm"
+     "lat": null,
+     "lng": null,
+     "geo": null
     },
     {
      "n": "Podki",
@@ -1682,9 +1682,9 @@
      "note": "",
      "state": "MP",
      "q": "Gadhsarai",
-     "lat": null,
-     "lng": null,
-     "geo": null
+     "lat": 22.82259,
+     "lng": 81.32911,
+     "geo": "osm2"
     },
     {
      "n": "Dindori",
@@ -1706,9 +1706,9 @@
      "note": "",
      "state": "MP",
      "q": "Devnala",
-     "lat": null,
-     "lng": null,
-     "geo": null
+     "lat": 22.70789,
+     "lng": 80.91123,
+     "geo": "osm2"
     },
     {
      "n": "Chabhi",
@@ -1730,9 +1730,9 @@
      "note": "",
      "state": "MP",
      "q": "Chikhli",
-     "lat": 23.31078,
-     "lng": 80.42333,
-     "geo": "osm"
+     "lat": null,
+     "lng": null,
+     "geo": null
     },
     {
      "n": "Madhupuri",
@@ -1742,9 +1742,9 @@
      "note": "",
      "state": "MP",
      "q": "Madhupuri",
-     "lat": null,
-     "lng": null,
-     "geo": null
+     "lat": 22.5304,
+     "lng": 80.4693,
+     "geo": "guide"
     },
     {
      "n": "Jargi",
@@ -1766,9 +1766,9 @@
      "note": "",
      "state": "MP",
      "q": "Ghansaur",
-     "lat": 22.71893,
-     "lng": 80.04157,
-     "geo": "osm"
+     "lat": 22.65875,
+     "lng": 79.95032,
+     "geo": "osm2"
     },
     {
      "n": "Diwari",
@@ -1826,9 +1826,9 @@
      "note": "",
      "state": "MP",
      "q": "Tilwara",
-     "lat": 23.18741,
-     "lng": 79.77595,
-     "geo": "osm"
+     "lat": null,
+     "lng": null,
+     "geo": null
     },
     {
      "n": "Siwani",
@@ -1862,9 +1862,9 @@
      "note": "",
      "state": "MP",
      "q": "Ghughari",
-     "lat": 23.03732,
-     "lng": 79.68685,
-     "geo": "osm"
+     "lat": 23.10919,
+     "lng": 79.74003,
+     "geo": "osm2"
     },
     {
      "n": "Chargaon",
@@ -1874,9 +1874,9 @@
      "note": "",
      "state": "MP",
      "q": "Chargaon",
-     "lat": null,
-     "lng": null,
-     "geo": null
+     "lat": 23.0541,
+     "lng": 79.63944,
+     "geo": "osm2"
     },
     {
      "n": "Gotegaon",
@@ -1898,9 +1898,9 @@
      "note": "",
      "state": "MP",
      "q": "Narsinghpur",
-     "lat": 22.93456,
-     "lng": 79.08678,
-     "geo": "osm"
+     "lat": 22.9467,
+     "lng": 79.19802,
+     "geo": "osm2"
     },
     {
      "n": "Barman",
@@ -1922,8 +1922,8 @@
      "note": "",
      "state": "MP",
      "q": "Linga",
-     "lat": 22.97555,
-     "lng": 79.01906,
+     "lat": 23.04475,
+     "lng": 78.93195,
      "geo": "osm"
     },
     {
@@ -1958,9 +1958,9 @@
      "note": "",
      "state": "MP",
      "q": "Saikheda",
-     "lat": 22.95502,
-     "lng": 78.67537,
-     "geo": "osm"
+     "lat": 22.95988,
+     "lng": 78.57962,
+     "geo": "osm2"
     },
     {
      "n": "Tumda",
@@ -1970,9 +1970,9 @@
      "note": "",
      "state": "MP",
      "q": "Tumda",
-     "lat": null,
-     "lng": null,
-     "geo": null
+     "lat": 22.96927,
+     "lng": 78.5409,
+     "geo": "osm2"
     },
     {
      "n": "Bankhedi",
@@ -1982,9 +1982,9 @@
      "note": "",
      "state": "MP",
      "q": "Bankhedi",
-     "lat": 22.77471,
-     "lng": 78.53344,
-     "geo": "osm"
+     "lat": 22.77131,
+     "lng": 78.53417,
+     "geo": "osm2"
     },
     {
      "n": "Pipariya",
@@ -2054,9 +2054,9 @@
      "note": "",
      "state": "MP",
      "q": "Narmadapuram",
-     "lat": 22.60028,
-     "lng": 77.92698,
-     "geo": "osm"
+     "lat": null,
+     "lng": null,
+     "geo": null
     },
     {
      "n": "Khoksar",
@@ -2114,9 +2114,9 @@
      "note": "",
      "state": "MP",
      "q": "Harda",
-     "lat": 22.2428,
-     "lng": 77.11792,
-     "geo": "osm"
+     "lat": 22.33888,
+     "lng": 77.09299,
+     "geo": "osm2"
     },
     {
      "n": "Handia",
@@ -2126,9 +2126,9 @@
      "note": "",
      "state": "MP",
      "q": "Handia",
-     "lat": null,
-     "lng": null,
-     "geo": null
+     "lat": 22.48667,
+     "lng": 76.98176,
+     "geo": "osm2"
     },
     {
      "n": "Khirkiya",
