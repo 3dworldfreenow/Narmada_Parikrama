@@ -125,11 +125,16 @@ mark{background:#ffe08a;color:#1f2a2e;border-radius:3px}
   .panel{left:0;right:0;bottom:0;top:auto;width:auto;border-radius:22px 22px 0 0;height:46vh;transition:height .25s ease;padding-bottom:env(safe-area-inset-bottom)}
   .panel[data-size=min]{height:118px}
   .panel[data-size=full]{height:calc(100vh - 84px)}
-  .grip{display:block;border:none;background:none;padding:8px 0 2px;cursor:pointer;flex-shrink:0}
-  .grip span{display:block;width:44px;height:5px;border-radius:9px;background:rgba(120,130,135,.5);margin:0 auto}
-  .fabs{bottom:calc(46vh + 14px)}
+  .panel[data-size=map]{height:calc(30px + env(safe-area-inset-bottom))}      /* full-screen map: only the handle shows */
+  .panel.dragging{transition:none}
+  .grip{display:block;border:none;background:none;padding:10px 0 8px;margin-bottom:-4px;cursor:grab;flex-shrink:0;touch-action:none;width:100%}
+  .grip span{display:block;width:48px;height:5px;border-radius:9px;background:rgba(120,130,135,.6);margin:0 auto}
+  .panel[data-size=map]>*:not(.grip){visibility:hidden}
+  .fabs{bottom:calc(46vh + 14px);transition:bottom .25s ease}
   .panel[data-size=min]~.fabs{bottom:132px}
+  .panel[data-size=map]~.fabs{bottom:calc(44px + env(safe-area-inset-bottom))}
   .panel[data-size=full]~.fabs{display:none}
+  .panel.dragging~.fabs{transition:none}
   .facts{grid-template-columns:1fr}
 }
 .searchbox{min-width:0}
@@ -210,3 +215,10 @@ mark{background:#ffe08a;color:#1f2a2e;border-radius:3px}
 .phmark{width:46px;height:46px;border-radius:10px;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.35);overflow:hidden;background:#ccc;position:relative}
 .phmark img{width:100%;height:100%;object-fit:cover;display:block}
 .phpop img{width:100%;border-radius:8px;display:block;margin-bottom:6px}.phpop p{margin:4px 0}.phpop .btn2{margin-top:6px;width:100%}
+
+/* full-screen map on a computer: the side panel slides away */
+@media (min-width:761px){
+  .panel{transition:transform .25s ease}
+  .panel[data-size=map]{transform:translateX(calc(-100% - 20px))}
+}
+.fab.fullfab.on{background:var(--river);color:#fff}

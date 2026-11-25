@@ -151,12 +151,11 @@
     if (v !== "listView") setSheet("half");
   }
   function back() { const v = viewStack.pop(); if (!v) return false; show(v, false); if (v === "listView") render(false); return true; }
-  window.appBack = () => { if (!$("#pviewer").hidden) { $("#pviewer").hidden = true; return true; } if (!$("#results").hidden) { $("#results").hidden = true; return true; } if (pickMode) { pickMode = null; return true; } return back(); };
+  window.appBack = () => { if (!$("#pviewer").hidden) { $("#pviewer").hidden = true; return true; } if (panel.dataset.size === "map") { setSheet("half"); return true; } if (!$("#results").hidden) { $("#results").hidden = true; return true; } if (pickMode) { pickMode = null; return true; } return back(); };
   const backBtn = l => `<button class="back" data-back>← ${l || "Back"}</button>`;
   document.addEventListener("click", e => { if (e.target.closest("[data-back]")) back(); });
   const panel = $("#panel");
   function setSheet(s) { panel.dataset.size = s; setTimeout(() => map && map.invalidateSize(), 260); }
-  $("#grip").onclick = () => { const o = ["min", "half", "full"]; setSheet(o[(o.indexOf(panel.dataset.size) + 1) % 3]); };
 
   // ================================================================ list
   let stage = 0, query = "", myPos = null, lastFix = null, shown = 100, selected = null;
@@ -874,6 +873,47 @@
     $("#zIn").onclick = () => map.zoomIn(); $("#zOut").onclick = () => map.zoomOut();
     $("#fitBtn").onclick = () => { layers.road.clearLayers(); layers.pin.clearLayers(); layers.track.clearLayers(); if (placed.length) map.fitBounds(placed.map(o => [o.lat, o.lng]), {padding: [40, 40]}); };
     $("#avatarBtn").onclick = openMenu;
+    // ---------------------------------------------------------------- bottom sheet: drag up/down like Google Maps
+    // positions: map (full-screen map, only the handle) · min · half · full
+    (function sheetGestures() {
+      const grip = $("#grip"), fabs = document.querySelector(".fabs"), phone = () => window.innerWidth <= 760;
+      const heightOf = s => ({map: 30, min: 118, half: window.innerHeight * 0.46, full: window.innerHeight - 84})[s];
+      let y0 = 0, h0 = 0, moved = false, lastY = 0, lastT = 0, vel = 0, dragging = false;
+      grip.addEventListener("pointerdown", e => {
+        if (!phone()) return;
+        dragging = true; moved = false; y0 = lastY = e.clientY; lastT = performance.now(); h0 = panel.getBoundingClientRect().height;
+        grip.setPointerCapture(e.pointerId); panel.classList.add("dragging");
+      });
+      grip.addEventListener("pointermove", e => {
+        if (!dragging) return;
+        const dy = e.clientY - y0; if (Math.abs(dy) > 6) moved = true;
+        const now = performance.now(); vel = (e.clientY - lastY) / Math.max(1, now - lastT); lastY = e.clientY; lastT = now;
+        const h = Math.max(30, Math.min(heightOf("full"), h0 - dy));
+        panel.style.height = h + "px"; if (fabs) fabs.style.bottom = (h + 14) + "px";
+      });
+      const end = () => {
+        if (!dragging) return; dragging = false; panel.classList.remove("dragging");
+        const h = panel.getBoundingClientRect().height; panel.style.height = ""; if (fabs) fabs.style.bottom = "";
+        if (!moved) return;                                    // a tap: handled by onclick
+        let s;
+        if (vel > 0.6) s = h < heightOf("half") ? "map" : (h < heightOf("full") - 40 ? "min" : "half");      // flick down
+        else if (vel < -0.6) s = h > heightOf("half") ? "full" : (h > heightOf("min") ? "half" : "min");     // flick up
+        else s = ["map", "min", "half", "full"].reduce((a, b) => Math.abs(heightOf(b) - h) < Math.abs(heightOf(a) - h) ? b : a);
+        setSheet(s); grip._skipClick = true; setTimeout(() => grip._skipClick = false, 50);
+      };
+      grip.addEventListener("pointerup", end); grip.addEventListener("pointercancel", end);
+      // tap the handle: map → half → full → min …
+      grip.onclick = () => { if (grip._skipClick) return; const o = ["min", "half", "full"], s = panel.dataset.size;
+        setSheet(s === "map" ? "half" : o[(o.indexOf(s) + 1) % 3]); };
+      // full-screen map button
+      const fb = $("#fullBtn");
+      const syncBtn = () => { const on = panel.dataset.size === "map"; fb.classList.toggle("on", on); fb.title = on ? "Show the panel" : "Full-screen map"; fb.setAttribute("aria-label", fb.title); };
+      fb.onclick = () => { setSheet(panel.dataset.size === "map" ? (phone() ? "half" : "half") : "map"); syncBtn(); };
+      new MutationObserver(syncBtn).observe(panel, {attributes: true, attributeFilter: ["data-size"]});
+      // moving the map lowers a big sheet out of the way
+      map.on("dragstart", () => { if (phone() && (panel.dataset.size === "half" || panel.dataset.size === "full")) setSheet("min"); });
+    })();
+
     $("#camBtn").onclick = openCamera;
     $("#camIn").onchange = () => { const f = $("#camIn").files[0]; if (f) takePhoto(f); };
     window.addEventListener("online", () => { updateNetbar(); sync(); });
