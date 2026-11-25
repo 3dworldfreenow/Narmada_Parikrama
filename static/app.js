@@ -604,6 +604,20 @@
 
   const panel = $("#panel"), order = ["min", "half", "full"];
   function setSheet(s) { if (window.innerWidth > 760 && s !== "map" && panel.dataset.size !== "map") return; panel.dataset.size = s; setTimeout(() => map.invalidateSize(), 260); }
+
+  // ---------------------------------------------------------------- walking guide ↔ bike / car route
+  (function routeSwitch() {
+    const has = window.VRoute && VRoute.init({data: window.VROUTE, map, box: $("#vehBox"), onPick: () => setSheet("min")});
+    const sw = $(".routesw"); if (!has) { sw.hidden = true; return; }
+    const set = r => {
+      $$(".routesw [data-route]").forEach(b => b.setAttribute("aria-checked", b.dataset.route === r));
+      $("#vehBox").hidden = r !== "vehicle"; $("#walkBox").hidden = r === "vehicle";
+      VRoute.show(r === "vehicle"); [routeLines, stopLayer].forEach(l => r === "vehicle" ? l.remove() : l.addTo(map)); try { localStorage.setItem("routeMode", r); } catch (e) { /* private mode */ }
+    };
+    sw.addEventListener("click", e => { const b = e.target.closest("[data-route]"); if (b) set(b.dataset.route); });
+    let saved = "walk"; try { saved = localStorage.getItem("routeMode") || "walk"; } catch (e) { /* ignore */ }
+    if (saved === "vehicle") set("vehicle");
+  })();
   // ---------------------------------------------------------------- bottom sheet: drag up/down like Google Maps
   // positions: map (full-screen map, only the handle) · min · half · full
   (function sheetGestures() {

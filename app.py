@@ -653,6 +653,21 @@ def stop_detail(stop_id):
 RIVER_FILE = os.path.join(BASE_DIR, "data", "narmada_river.json")
 
 
+@app.route("/vehicle-route.js")
+def vehicle_route_data():
+    """Bike / four-wheeler route (Acharya Shri Anildas Yogiraj), with map positions once they are found."""
+    for name in ("vehicle_route.json", "vehicle_route_src.json"):
+        try:
+            with open(os.path.join(BASE_DIR, "data", name), encoding="utf-8") as fh:
+                body = "window.VROUTE=" + fh.read().strip() + ";"
+            break
+        except OSError:
+            body = "window.VROUTE=null;"
+    resp = app.response_class(body, mimetype="application/javascript")
+    resp.headers["Cache-Control"] = "private, max-age=3600"
+    return resp
+
+
 @app.route("/river-data.js")
 def river_data():
     """The Narmada's course (from OpenStreetMap) for the 'don't cross the river' rule."""

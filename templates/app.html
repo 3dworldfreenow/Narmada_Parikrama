@@ -61,6 +61,12 @@
     </div>
 
     <div id="stopsTab">
+      <div class="seg routesw" role="radiogroup" aria-label="Route">
+        <button role="radio" data-route="walk" aria-checked="true">🚶 Walking guide</button>
+        <button role="radio" data-route="vehicle" aria-checked="false">🏍 Bike / Car route</button>
+      </div>
+      <div id="vehBox" hidden></div>
+      <div id="walkBox">
       <div class="chiprow" role="group" aria-label="Stage">
         <button class="chip2 on" data-s="0">All</button>
         <button class="chip2" data-s="1"><i class="sw s1"></i>Stage 1 · South</button>
@@ -76,6 +82,7 @@
         <button class="chip2" data-f="near">📍 Near me</button>
       </div>
       <div class="list" id="list" role="list"></div>
+      </div>
     </div>
 
     <div id="onlineTab" hidden>
@@ -128,6 +135,8 @@ const STAGES = {1:{n:"Stage 1",b:"South bank",c:"#0f6e77"}, 2:{n:"Stage 2",b:"No
 </script>
 <script src="{{ url_for('river_data') }}"></script>
 <script src="{{ url_for('static', filename='river-rule.js') }}"></script>
+<script src="{{ url_for('vehicle_route_data') }}"></script>
+<script src="{{ url_for('static', filename='vroute.js') }}"></script>
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>

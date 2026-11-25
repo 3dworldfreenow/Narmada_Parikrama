@@ -1020,6 +1020,20 @@
       map.on("dragstart", () => { if (phone() && (panel.dataset.size === "half" || panel.dataset.size === "full")) setSheet("min"); });
     })();
 
+
+    // ---------------------------------------------------------------- walking guide ↔ bike / car route
+    (function routeSwitch() {
+      const has = window.VRoute && VRoute.init({data: window.VROUTE, map, box: $("#vehBox"), onPick: () => setSheet("min")});
+      const sw = $(".routesw"); if (!has) { sw.hidden = true; return; }
+      const set = r => {
+        $$(".routesw [data-route]").forEach(b => b.setAttribute("aria-checked", b.dataset.route === r));
+        $("#vehBox").hidden = r !== "vehicle"; $("#walkBox").hidden = r === "vehicle";
+        VRoute.show(r === "vehicle"); [layers.route, layers.stops].forEach(l => r === "vehicle" ? l.remove() : l.addTo(map)); try { localStorage.setItem("routeMode", r); } catch (e) { /* private mode */ }
+      };
+      sw.addEventListener("click", e => { const b = e.target.closest("[data-route]"); if (b) set(b.dataset.route); });
+      let saved = "walk"; try { saved = localStorage.getItem("routeMode") || "walk"; } catch (e) { /* ignore */ }
+      if (saved === "vehicle") set("vehicle");
+    })();
     $("#camBtn").onclick = () => openCamera();
     wireFamily();
     $("#camIn").onchange = () => { const f = $("#camIn").files[0]; if (f) takePhoto(f, pendingReq); pendingReq = null; };

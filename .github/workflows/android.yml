@@ -9,6 +9,8 @@ on:
       - "data/stops.json"
       - "data/narmada_river.json"
       - "static/river-rule.js"
+      - "static/vroute.js"
+      - "data/vehicle_route.json"
       - ".github/workflows/android.yml"
   workflow_dispatch:
 
@@ -38,6 +40,8 @@ jobs:
           mkdir -p $WWW/lib
           cp static/app.css $WWW/app.css
           cp static/river-rule.js $WWW/river-rule.js
+          cp static/vroute.js $WWW/vroute.js
+          echo "window.VROUTE=$(cat data/vehicle_route.json 2>/dev/null || cat data/vehicle_route_src.json);" > $WWW/vehicle-route.js
           echo "window.RIVER=$(cat data/narmada_river.json);" > $WWW/river-data.js
           python3 - <<'PY'
           import json

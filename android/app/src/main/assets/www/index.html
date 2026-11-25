@@ -72,6 +72,12 @@
         <button data-tab="family" aria-selected="false">Family <span id="famCount" class="cnt">0</span></button>
       </div>
       <div id="stopsTab">
+        <div class="seg routesw" role="radiogroup" aria-label="Route">
+          <button role="radio" data-route="walk" aria-checked="true">🚶 Walking guide</button>
+          <button role="radio" data-route="vehicle" aria-checked="false">🏍 Bike / Car route</button>
+        </div>
+        <div id="vehBox" hidden></div>
+        <div id="walkBox">
         <div class="chiprow">
           <button class="chip2 on" data-s="0">All</button>
           <button class="chip2" data-s="1"><i class="sw s1"></i>Stage 1 · South</button>
@@ -86,6 +92,7 @@
           <button class="chip2" data-f="ghat">🛕 Ghat</button>
         </div>
         <div class="list" id="list"></div>
+        </div>
       </div>
       <div id="onlineTab" hidden>
         <p class="hintline">Pilgrims active in the last few minutes (approximate area). Needs internet.</p>
@@ -135,6 +142,8 @@
 <script src="seed-stops.js"></script>
 <script src="river-data.js"></script>
 <script src="river-rule.js"></script>
+<script src="vehicle-route.js"></script>
+<script src="vroute.js"></script>
 <script src="mobile.js"></script>
 </body>
 </html>
