@@ -68,7 +68,68 @@
     if (pts.length) map.fitBounds(pts, {padding: [40, 40]});
   }
 
+  // ---------------------------------------------------------------- finding stops by name
+  const kmBetween = (a, b) => { const r = x => x * Math.PI / 180, h = Math.sin(r(b[0] - a[0]) / 2) ** 2 + Math.cos(r(a[0])) * Math.cos(r(b[0])) * Math.sin(r(b[1] - a[1]) / 2) ** 2; return 12742 * Math.asin(Math.sqrt(h)); };
+  const norm = t => String(t || "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
+  /** where a stop without a position should be: between its placed neighbours, by the km */
+  function guessBetween(list, i, cumOf) {
+    const c = cumOf(list[i]);
+    let a = null, b = null;
+    for (let j = i - 1; j >= 0; j--) if (list[j].lat != null && !isNaN(cumOf(list[j]))) { a = list[j]; break; }
+    for (let j = i + 1; j < list.length; j++) if (list[j].lat != null && !isNaN(cumOf(list[j]))) { b = list[j]; break; }
+    if (!a && !b) return null;
+    if (!a || !b || isNaN(c)) { const o = a || b; return {lat: o.lat, lng: o.lng, a, b, spread: 30}; }
+    const f = Math.min(1, Math.max(0, (c - cumOf(a)) / Math.max(1, cumOf(b) - cumOf(a))));
+    return {lat: a.lat + (b.lat - a.lat) * f, lng: a.lng + (b.lng - a.lng) * f, a, b,
+            spread: Math.max(8, Math.min(c - cumOf(a), cumOf(b) - c) + 8)};
+  }
+  /** look a name up on OpenStreetMap (Photon) near a guessed spot; null if nothing fits */
+  async function findNear(name, guess, maxKm) {
+    const clean = String(name).replace(/\(.*?\)/g, "").trim();
+    const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(clean)}&limit=10&lang=en&lat=${guess.lat}&lon=${guess.lng}` +
+      `&bbox=${[guess.lng - 1.2, guess.lat - 1.2, guess.lng + 1.2, guess.lat + 1.2].map(x => x.toFixed(3)).join(",")}`;
+    const j = await (await fetch(url)).json();
+    let best = null;
+    (j.features || []).forEach(f => {
+      const [lng, lat] = f.geometry.coordinates, d = kmBetween([lat, lng], [guess.lat, guess.lng]), p = f.properties;
+      if (d > maxKm) return;
+      if (!best || d < best.d) best = {lat, lng, d, label: p.name || clean, sub: [(p.osm_value || "place").replace(/_/g, " "), p.county || p.district, p.state].filter(Boolean).join(" · ")};
+    });
+    return best;
+  }
+  /** find the spot for a stop: its own position, an OpenStreetMap match near the right place, or an approximate spot */
+  async function locate(name, list, i, cumOf, online) {
+    const s = list[i];
+    if (s.lat != null) return {lat: s.lat, lng: s.lng, kind: "exact"};
+    const g = guessBetween(list, i, cumOf);
+    if (online && g) {
+      try { const f = await findNear(name, g, g.spread); if (f) return {lat: f.lat, lng: f.lng, kind: "osm", label: f.label, sub: f.sub}; } catch (e) { /* offline */ }
+    }
+    if (g) return {lat: g.lat, lng: g.lng, kind: "approx", a: g.a, b: g.b};
+    return null;
+  }
+
   window.VRoute = {
+    /** bike/car stops whose English or Hindi name (or note) matches the words typed */
+    search(q, n) {
+      if (!D) return [];
+      const t = norm(q).split(/\s+/).filter(Boolean), out = [];
+      D.parts.forEach(p => p.stops.forEach((s, i) => {
+        const hay = norm(`${s.n} ${s.hi} ${s.note}`);
+        if (t.every(w => hay.includes(w))) out.push({key: p.id + ":" + i, s, part: p});
+      }));
+      return out.slice(0, n || 6);
+    },
+    /** {label, sub, lat, lng} for a bike/car stop, finding a position if it has none */
+    async place(key, online) {
+      const [pid, i] = key.split(":").map(Number), p = D.parts[pid - 1], s = p.stops[i];
+      const at = await locate(s.n, p.stops, i, o => o.cum, online);
+      if (!at) return null;
+      const where = `🏍 Bike/car route · Part ${pid} · ${i ? "+" + s.km + " km · " : ""}${s.cum} km from ${p.stops[0].n}${s.note ? " · " + s.note : ""}`;
+      const how = at.kind === "osm" ? " · position from OpenStreetMap, please check" : at.kind === "approx" ? (at.a && at.b ? ` · approximate spot between ${at.a.n} and ${at.b.n}` : ` · approximate spot near ${(at.a || at.b).n}`) : "";
+      return {label: s.n, sub: where + how, lat: at.lat, lng: at.lng, approx: at.kind !== "exact"};
+    },
+    locate, guessBetween, findNear,
     init(o) { D = o.data; map = o.map; box = o.box; onPick = o.onPick; layer = L.layerGroup(); if (box) wire(); return !!D; },
     show(on) { if (!D) return; if (on) { draw(); layer.addTo(map); render(); fit(); } else layer.remove(); },
     data: () => D,

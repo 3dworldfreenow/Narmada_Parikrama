@@ -216,6 +216,7 @@
     if (q("[data-next]")) q("[data-next]").onclick = () => openDirections(stopPoint(o), stopPoint(nx));
     q("[data-upd]").onclick = () => openUpdate(o);
     if (q("[data-rep]")) q("[data-rep]").onclick = () => openReport(o.lat, o.lng);
+    if (o.lat == null) locateWalkingStop(o);
     if (o.lat != null) { if (fly) map.flyTo([o.lat, o.lng], Math.max(map.getZoom(), 12), {duration: .6});
       markers[i].setStyle({radius: 10}); setTimeout(() => markers[i] && markers[i].setStyle({radius: 6}), 1800); }
     if (o.pm && online()) loadGallery(o.id);
@@ -241,21 +242,22 @@
   }
   async function suggest(q, box, onPick) {
     const seq = ++sSeq; if (q.length < 2) { box.hidden = true; return; }
-    const t = q.toLowerCase().split(/\s+/).filter(Boolean), stops = DATA.filter(o => t.every(w => o._s.includes(w))).slice(0, 6);
+    const t = q.toLowerCase().split(/\s+/).filter(Boolean), stops = DATA.filter(o => t.every(w => o._s.includes(w))).slice(0, 6); const veh = window.VRoute ? VRoute.search(q, 6) : [];
     const draw = places => {
       if (seq !== sSeq) return;
       let h = stops.length ? `<div class="rh">Parikrama stops</div>` + stops.map(o => `<div class="ri" data-stop="${o._i}"><span class="ric" style="background:${STAGES[o.st].c}">${esc(o.n || "·")}</span><div><b>${esc(o.v || "(not named)")}</b> <span class="mr">${esc(o.vm)}</span><small>${STAGES[o.st].n}${o.lat == null ? " · not on map yet" : ""}</small></div></div>`).join("") : "";
+      if (veh.length) h += `<div class="rh">🏍 Bike / Car route</div>` + veh.map(v => `<div class="ri" data-veh="${v.key}"><span class="ric" style="background:${({1: "#0f6e77", 2: "#c8641e", 3: "#7a4fb0"})[v.part.id]}">${v.part.id}</span><div><b>${esc(v.s.n)}</b> <span class="mr">${esc(v.s.hi)}</span><small>Part ${v.part.id} · ${v.s.cum} km from ${esc(v.part.stops[0].n)}${v.s.lat == null ? " · not placed yet – tap to look it up" : ""}</small></div></div>`).join("");
       if (places === null) h += `<div class="rh">Places</div><div class="ri muted">Searching…</div>`;
       else if (places === "offline") h += `<div class="ri muted">Other places need internet.</div>`;
       else if (places.length) h += `<div class="rh">Places on the map</div>` + places.map((p, k) => `<div class="ri" data-place="${k}"><span class="ric pl">📍</span><div><b>${esc(p.label)}</b><small>${esc(p.sub)}</small></div></div>`).join("");
       box.innerHTML = h || `<div class="ri muted">Nothing found.</div>`; box.hidden = false; box._p = Array.isArray(places) ? places : [];
     };
     if (!online()) { draw("offline"); } else { draw(null); try { draw(await placeSearch(q)); } catch (e) { draw("offline"); } }
-    box.onclick = e => { e.stopPropagation(); const s = e.target.closest("[data-stop]"), p = e.target.closest("[data-place]");
-      if (s) { box.hidden = true; onPick({stop: +s.dataset.stop}); } else if (p) { box.hidden = true; onPick({place: box._p[+p.dataset.place]}); } };
+    box.onclick = e => { e.stopPropagation(); const s = e.target.closest("[data-stop]"), p = e.target.closest("[data-place]"), v = e.target.closest("[data-veh]");
+      if (v) { box.hidden = true; onPick({veh: v.dataset.veh}); } else if (s) { box.hidden = true; onPick({stop: +s.dataset.stop}); } else if (p) { box.hidden = true; onPick({place: box._p[+p.dataset.place]}); } };
   }
   $("#q").addEventListener("input", e => { const v = e.target.value.trim(); query = v.toLowerCase(); render();
-    clearTimeout(sTimer); sTimer = setTimeout(() => suggest(v, results, pk => pk.stop != null ? openStop(pk.stop, true) : openPlace(pk.place)), 300); });
+    clearTimeout(sTimer); sTimer = setTimeout(() => suggest(v, results, pk => pk.veh ? openVeh(pk.veh) : pk.stop != null ? openStop(pk.stop, true) : openPlace(pk.place)), 300); });
   $("#q").addEventListener("keydown", e => { if (e.key === "Enter") { results.hidden = true; e.target.blur(); show("listView"); } });
   document.addEventListener("click", e => { if (!e.target.closest(".searchbox")) results.hidden = true; });
 
@@ -276,6 +278,27 @@
     pv.querySelector("[data-rep]").onclick = () => openReport(p.lat, p.lng);
     pv.querySelectorAll("[data-stop]").forEach(el => el.onclick = () => openStop(+el.dataset.stop, true));
   }
+
+  // a stop without a map position: look it up on OpenStreetMap near where the km put it, else show an approximate spot
+  async function locateWalkingStop(o) {
+    if (!window.VRoute || o.lat != null) return;
+    const list = DATA.filter(x => x.st === o.st), i = list.indexOf(o);
+    const at = await VRoute.locate(o.v, list, i, x => parseFloat(x.cum), online());
+    if (!at || selected !== o._i) return;
+    dropPin(at.lat, at.lng); map.flyTo([at.lat, at.lng], at.kind === "osm" ? 13 : 11, {duration: .6});
+    const box = document.createElement("div"); box.className = "note warn";
+    box.innerHTML = at.kind === "osm" ? `📍 Not placed by the guide yet. The pin shows “${esc(at.label)}” found on OpenStreetMap near the right km – please check.`
+      : `📍 Not placed by the guide yet. The pin is an approximate spot ${at.a && at.b ? `between ${esc(at.a.v)} and ${esc(at.b.v)}, by the km` : `near ${esc((at.a || at.b).v)}`}.`;
+    const go = document.createElement("button"); go.className = "btn2"; go.textContent = "➤ Directions to this spot"; go.style.marginTop = "8px";
+    go.onclick = () => openDirections(null, {label: o.v + (at.kind === "osm" ? "" : " (approx.)"), lat: at.lat, lng: at.lng});
+    box.appendChild(document.createElement("br")); box.appendChild(go);
+    const head = $("#detailView .dhead"); if (head) head.appendChild(box);
+  }
+  async function openVeh(key) {
+    const p = await VRoute.place(key, online());
+    if (!p) return toast("That stop isn't on the map yet.");
+    openPlace(p);
+  }
   let pickMode = null;
 
   // ================================================================ directions (internet needed)
@@ -293,6 +316,7 @@
     show("dirView");
     const fill = () => { $("#fromIn").value = dir.from ? dir.from.label : ""; $("#toIn").value = dir.to ? dir.to.label : ""; }; fill();
     [["from", $("#fromIn")], ["to", $("#toIn")]].forEach(([k, inp]) => { let t; inp.oninput = () => { clearTimeout(t); t = setTimeout(() => suggest(inp.value.trim(), $("#epResults"), pk => {
+      if (pk.veh) { VRoute.place(pk.veh, online()).then(pl => { if (!pl) return toast("That stop isn't on the map yet."); dir[k] = {label: pl.label, lat: pl.lat, lng: pl.lng}; fill(); route(); }); return; }
       if (pk.stop != null) { const o = DATA[pk.stop]; if (o.lat == null) return toast("That stop isn't on the map yet."); dir[k] = stopPoint(o); } else dir[k] = {label: pk.place.label, lat: pk.place.lat, lng: pk.place.lng};
       fill(); route(); }), 300); }; });
     $$("#dirView [data-me]").forEach(b => b.onclick = () => { dir[b.dataset.me] = {label: "My location", me: true}; fill(); route(); });

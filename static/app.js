@@ -124,6 +124,7 @@
       </div>`;
     show("detailView");
     const dv = $("#detailView");
+    if (o.lat == null) locateWalkingStop(o);
     if (o.lat != null) {
       dv.querySelector("[data-dir-to]").onclick = () => openDirections(null, stopPoint(o));
       const n = dv.querySelector("[data-dir-next]"); if (n) n.onclick = () => openDirections(stopPoint(o), stopPoint(nx));
@@ -155,12 +156,13 @@
   async function suggest(q, box, onPick) {
     const seq = ++searchSeq;
     if (q.length < 2) { box.hidden = true; return; }
-    const stops = stopSuggestions(q);
+    const stops = stopSuggestions(q); const veh = window.VRoute ? VRoute.search(q, 6) : [];
     const draw = places => {
       if (seq !== searchSeq) return;
       let h = "";
       if (stops.length) h += `<div class="rh">Parikrama stops</div>` + stops.map(o =>
         `<div class="ri" data-stop="${o._i}"><span class="ric" style="background:${STAGES[o.st].c}">${esc(o.n || "·")}</span><div><b>${esc(o.v || "(not named)")}</b> <span class="mr">${esc(o.vm)}</span><small>${STAGES[o.st].n} · ${o.lat == null ? "not on map yet" : esc(o.sp || STAGES[o.st].b)}</small></div></div>`).join("");
+      if (veh.length) h += `<div class="rh">🏍 Bike / Car route</div>` + veh.map(v => `<div class="ri" data-veh="${v.key}"><span class="ric" style="background:${({1: "#0f6e77", 2: "#c8641e", 3: "#7a4fb0"})[v.part.id]}">${v.part.id}</span><div><b>${esc(v.s.n)}</b> <span class="mr">${esc(v.s.hi)}</span><small>Part ${v.part.id} · ${v.s.cum} km from ${esc(v.part.stops[0].n)}${v.s.lat == null ? " · not placed yet – tap to look it up" : ""}</small></div></div>`).join("");
       if (places === null) h += `<div class="rh">Places</div><div class="ri muted">Searching the map…</div>`;
       else if (places.length) h += `<div class="rh">Places on the map</div>` + places.map((p, k) =>
         `<div class="ri" data-place="${k}"><span class="ric pl">📍</span><div><b>${esc(p.label)}</b><small>${esc(p.sub)}</small></div></div>`).join("");
@@ -171,8 +173,9 @@
     try { draw(await placeSearch(q)); } catch (e) { draw([]); }
     box.onclick = e => {
       e.stopPropagation();
-      const s = e.target.closest("[data-stop]"), p = e.target.closest("[data-place]");
-      if (s) { box.hidden = true; onPick({stop: +s.dataset.stop}); }
+      const s = e.target.closest("[data-stop]"), p = e.target.closest("[data-place]"), v = e.target.closest("[data-veh]");
+      if (v) { box.hidden = true; onPick({veh: v.dataset.veh}); }
+      else if (s) { box.hidden = true; onPick({stop: +s.dataset.stop}); }
       else if (p) { box.hidden = true; onPick({place: box._places[+p.dataset.place]}); }
     };
   }
@@ -181,11 +184,33 @@
     query = v.toLowerCase(); render();
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => suggest(v, results, pick => {
-      if (pick.stop != null) openStop(pick.stop, true); else openPlace(pick.place);
+      if (pick.veh) openVeh(pick.veh); else if (pick.stop != null) openStop(pick.stop, true); else openPlace(pick.place);
     }), 300);
   });
   $("#q").addEventListener("keydown", e => { if (e.key === "Escape") results.hidden = true; if (e.key === "Enter") { results.hidden = true; show("listView"); } });
   document.addEventListener("click", e => { if (!e.target.closest(".searchbox")) results.hidden = true; });
+
+
+  // a stop without a map position: look it up on OpenStreetMap near where the km put it, else show an approximate spot
+  async function locateWalkingStop(o) {
+    if (!window.VRoute || o.lat != null) return;
+    const list = DATA.filter(x => x.st === o.st), i = list.indexOf(o);
+    const at = await VRoute.locate(o.v, list, i, x => parseFloat(x.cum), navigator.onLine);
+    if (!at || selected !== o._i) return;
+    dropPin(at.lat, at.lng); map.flyTo([at.lat, at.lng], at.kind === "osm" ? 13 : 11, {duration: .6});
+    const box = document.createElement("div"); box.className = "note warn";
+    box.innerHTML = at.kind === "osm" ? `📍 Not placed by the guide yet. The pin shows “${esc(at.label)}” found on OpenStreetMap near the right km – please check.`
+      : `📍 Not placed by the guide yet. The pin is an approximate spot ${at.a && at.b ? `between ${esc(at.a.v)} and ${esc(at.b.v)}, by the km` : `near ${esc((at.a || at.b).v)}`}.`;
+    const go = document.createElement("button"); go.className = "btn2"; go.textContent = "➤ Directions to this spot"; go.style.marginTop = "8px";
+    go.onclick = () => openDirections(null, {label: o.v + (at.kind === "osm" ? "" : " (approx.)"), lat: at.lat, lng: at.lng});
+    box.appendChild(document.createElement("br")); box.appendChild(go);
+    const head = $("#detailView .dhead"); if (head) head.appendChild(box);
+  }
+  async function openVeh(key) {
+    const p = await VRoute.place(key, navigator.onLine);
+    if (!p) return alertMsg("That stop isn't on the map yet.");
+    openPlace(p);
+  }
 
   // ================================================================ place card (any point on the map)
   const PIN_HTML = '<div class="gpin"><span></span></div>';
@@ -248,6 +273,8 @@
       let t;
       inp.addEventListener("focus", () => inp.select());
       inp.addEventListener("input", () => { clearTimeout(t); t = setTimeout(() => suggest(inp.value.trim(), box, pick => {
+        if (pick.veh) { VRoute.place(pick.veh, navigator.onLine).then(pl => { if (!pl) return alertMsg("That stop isn't on the map yet.");
+          dir[k] = {label: pl.label, lat: pl.lat, lng: pl.lng}; fill(); route(); }); return; }
         if (pick.stop != null) {
           const o = DATA[pick.stop];
           if (o.lat == null) { alertMsg("That stop isn't on the map yet."); return; }
