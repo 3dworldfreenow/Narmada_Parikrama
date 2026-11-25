@@ -293,17 +293,17 @@ def create_blueprint(core):
     # ------------------------------------------------------------ offline map
     @bp.get("/map")
     def map_info():
-        f = core.MAP_PMTILES
-        ok = bool(f and os.path.isfile(f))
-        return jsonify({"available": ok, "bytes": os.path.getsize(f) if ok else 0, "maxzoom": core.MAP_MAXZOOM,
+        f = core.map_path()
+        ok = bool(f)
+        return jsonify({"available": ok, "bytes": os.path.getsize(f) if ok else 0, "maxzoom": core.map_maxzoom(),
                         "updated": datetime.fromtimestamp(os.path.getmtime(f), timezone.utc).isoformat() if ok else None,
                         "url": "/api/v1/map/narmada.pmtiles" if ok else None})
 
     @bp.get("/map/narmada.pmtiles")
     def map_file():
-        f = core.MAP_PMTILES
-        if not (f and os.path.isfile(f)):
-            return err("The server has no offline map yet. Ask the admin to run deploy/download-map.sh.", 404)
+        f = core.map_path()
+        if not f:
+            return err("The server has no offline map yet. Ask the admin to download it (Admin → Offline map).", 404)
         resp = send_file(f, mimetype="application/octet-stream", conditional=True, max_age=3600)
         resp.headers["Accept-Ranges"] = "bytes"
         return resp

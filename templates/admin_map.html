@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Offline map – Narmada Parikrama{% endblock %}
+{% block body %}
+<main class="wrap" style="padding:0 20px 60px"><section class="card panel" style="margin:22px auto;max-width:760px">
+  <h1>🗺 Offline map</h1>
+  <p class="meta">The map of the whole parikrama region (Amarkantak → Gulf of Khambhat) stored on this server. The website draws its map from it, and the Android app downloads it for use without internet (☰ Menu → Offline map). Without it, everyone uses OpenStreetMap's online tiles.</p>
+
+  <div id="mapstate" class="mapcard">
+    {% if st.map.available %}
+      <b>✅ Map is on the server</b>
+      <div class="meta">{{ '%.0f'|format(st.map.bytes / 1e6) }} MB · zoom up to {{ st.map.maxzoom }} · downloaded {{ st.map.updated }}{% if st.map.source %} · from {{ st.map.source.rsplit('/', 1)[-1] }}{% endif %}</div>
+    {% else %}
+      <b>No offline map yet</b><div class="meta">The apps use online OpenStreetMap tiles for now.</div>
+    {% endif %}
+    <div class="meta">Free disk space: {{ st.free_gb }} GB · file: <code>{{ st.map.path }}</code></div>
+  </div>
+
+  <div id="dl" {% if st.state != 'running' %}hidden{% endif %} class="mapcard running">
+    <b>⏳ <span id="step">{{ st.step }}</span></b>
+    <div class="bar"><span id="barfill"></span></div>
+    <div class="meta" id="got"></div>
+  </div>
+  {% if st.state == 'error' %}<div class="mapcard err"><b>Last download failed:</b> {{ st.error }}</div>{% endif %}
+
+  <form method="post" action="{{ url_for('admin_map_download') }}" id="dlform" {% if st.state == 'running' %}hidden{% endif %}>
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <label for="maxzoom">Detail level</label>
+    <select id="maxzoom" name="maxzoom" style="width:auto">
+      <option value="12">Zoom 12 – towns and main roads (smallest)</option>
+      <option value="13">Zoom 13 – villages and roads</option>
+      <option value="14" {% if st.map.maxzoom == 14 or not st.map.available %}selected{% endif %}>Zoom 14 – streets and paths (recommended)</option>
+      <option value="15">Zoom 15 – most detail (about twice the size of 14)</option>
+    </select>
+    <p class="meta">Each extra zoom level roughly doubles the file. Takes 5–30 minutes; you can leave this page. Re-download monthly for fresh OpenStreetMap data. Pilgrims' phones need to download the map again after an update.</p>
+    <p><button class="btn">{{ 'Update map' if st.map.available else 'Download map' }}</button></p>
+  </form>
+
+  {% if st.map.available %}
+  <form method="post" action="{{ url_for('admin_map_delete') }}" onsubmit="return confirm('Delete the offline map from the server? The apps will use online tiles.')">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <button class="linkbtn dark">Delete the offline map</button>
+  </form>
+  {% endif %}
+
+  <details {% if st.state in ('running', 'error') %}open{% endif %} style="margin-top:16px"><summary class="meta">Download log</summary>
+    <pre id="log" class="maplog">{{ st.log }}</pre></details>
+  <p><a class="btn alt" href="{{ url_for('index') }}">Back to map</a></p>
+</section></main>
+<style>
+.mapcard{border:1px solid var(--line,#ddd);border-radius:12px;padding:12px 14px;margin:12px 0}
+.mapcard.running{background:#e8f0fe}.mapcard.err{background:#fce8e6}
+.bar{height:8px;border-radius:9px;background:#d2e3fc;overflow:hidden;margin:8px 0}
+.bar span{display:block;height:100%;width:30%;background:#1a73e8;border-radius:9px;animation:slide 1.4s infinite ease-in-out}
+@keyframes slide{0%{margin-left:-30%}100%{margin-left:100%}}
+.maplog{white-space:pre-wrap;font-size:12px;max-height:280px;overflow:auto;background:#111;color:#ddd;padding:10px;border-radius:8px}
+</style>
+<script>
+(function () {
+  const running = {{ (st.state == 'running')|tojson }};
+  if (!running) return;
+  const url = {{ url_for('admin_map_status')|tojson }};
+  const tick = async () => {
+    try {
+      const s = await (await fetch(url)).json();
+      document.getElementById("step").textContent = s.step || "";
+      document.getElementById("got").textContent = s.part_bytes ? `${(s.part_bytes / 1e6).toFixed(0)} MB downloaded so far` : "";
+      document.getElementById("log").textContent = s.log || "";
+      if (s.state !== "running") { location.reload(); return; }
+    } catch (e) { /* try again */ }
+    setTimeout(tick, 3000);
+  };
+  tick();
+})();
+</script>
+{% endblock %}

@@ -19,6 +19,9 @@ import os
 import re
 import secrets
 import sqlite3
+import time
+import subprocess
+import shutil
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 
@@ -42,6 +45,8 @@ LOCATION_MAX_AGE_H = float(os.environ.get("LOCATION_MAX_AGE_H", "12"))  # ask fo
 # Optional: map file downloaded by deploy/download-map.sh (served from this server).
 MAP_PMTILES = os.environ.get("MAP_PMTILES", "")
 MAP_MAXZOOM = int(os.environ.get("MAP_MAXZOOM", "14"))
+# Where the offline map lives. The admin can download/refresh it from Admin → Offline map.
+TILES_DIR = os.environ.get("TILES_DIR") or (os.path.dirname(MAP_PMTILES) if MAP_PMTILES else "")
 # Path reports: what pilgrims can say about a road / footpath at a spot on the map.
 REPORT_KINDS = {
     "good": "✅ Good path", "closed": "⛔ Road/path closed", "mud": "🟤 Muddy / slippery",
@@ -591,8 +596,8 @@ def index():
         """SELECT e.*, COALESCE(u.username, u.name) AS user_name, s.village, s.stage FROM edits e
            JOIN users u ON u.id=e.user_id JOIN stops s ON s.id=e.stop_id
            WHERE e.status='approved' ORDER BY e.reviewed_at DESC, e.id DESC LIMIT 8""").fetchall()
-    local_map = bool(MAP_PMTILES and os.path.isfile(MAP_PMTILES))
-    return render_template("app.html", data=data, recent=recent, local_map=local_map, map_maxzoom=MAP_MAXZOOM,
+    local_map = bool(map_path())
+    return render_template("app.html", data=data, recent=recent, local_map=local_map, map_maxzoom=map_maxzoom(),
                            report_kinds=REPORT_KINDS, report_radius=REPORT_RADIUS_KM)
 
 
@@ -643,10 +648,11 @@ def river_data():
 @app.route("/tiles/narmada.pmtiles")
 def map_tiles():
     """The offline map file. Browsers read small pieces of it (HTTP Range requests)."""
-    if not (MAP_PMTILES and os.path.isfile(MAP_PMTILES)):
+    f = map_path()
+    if not f:
         abort(404)
     from flask import send_file
-    resp = send_file(MAP_PMTILES, mimetype="application/octet-stream", conditional=True, max_age=86400)
+    resp = send_file(f, mimetype="application/octet-stream", conditional=True, max_age=86400)
     resp.headers["Accept-Ranges"] = "bytes"
     return resp
 
@@ -1408,6 +1414,106 @@ def admin_clear_location(stop_id):
 def too_large(_e):
     flash("Your files are too big to upload together. Please send fewer photos or a shorter video.", "error")
     return redirect(request.path)
+
+
+# ---------------------------------------------------------------- offline map (Admin → Offline map)
+def tiles_dir():
+    return TILES_DIR or os.path.join(os.path.dirname(os.path.abspath(DATABASE)), "tiles")
+
+
+def map_target():
+    return MAP_PMTILES or os.path.join(tiles_dir(), "narmada.pmtiles")
+
+
+def map_path():
+    """The offline map file if there is one, else '' (then the apps use online OpenStreetMap tiles)."""
+    f = map_target()
+    return f if os.path.isfile(f) and os.path.getsize(f) > 1024 else ""
+
+
+def _read_json(f):
+    try:
+        with open(f) as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return {}
+
+
+def map_meta():
+    return _read_json(os.path.join(os.path.dirname(map_target()), "narmada.json"))
+
+
+def map_maxzoom():
+    return int(map_meta().get("maxzoom") or MAP_MAXZOOM)
+
+
+def map_download_status():
+    d = os.path.dirname(map_target())
+    st = _read_json(os.path.join(d, "download.json"))
+    if st.get("state") == "running":
+        try:
+            os.kill(int(st.get("pid", 0)), 0)            # still alive?
+        except (OSError, ValueError):
+            st.update(state="error", error="The download stopped (server restarted?). Start it again.")
+    try:
+        with open(os.path.join(d, "download.log"), errors="replace") as fh:
+            st["log"] = "".join(fh.readlines()[-25:]).replace("\r", "\n")[-4000:]
+    except OSError:
+        st["log"] = ""
+    f = map_path()
+    st["map"] = {"available": bool(f), "bytes": os.path.getsize(f) if f else 0, "maxzoom": map_maxzoom(), "path": map_target(),
+                 "updated": datetime.fromtimestamp(os.path.getmtime(f), IST).strftime("%d %b %Y, %I:%M %p") if f else None,
+                 "source": map_meta().get("source")}
+    st["free_gb"] = round(shutil.disk_usage(d if os.path.isdir(d) else os.path.dirname(d) or "/").free / 1e9, 1)
+    return st
+
+
+@app.route("/admin/map")
+@admin_required
+def admin_map():
+    return render_template("admin_map.html", st=map_download_status())
+
+
+@app.route("/admin/map/status")
+@admin_required
+def admin_map_status():
+    return map_download_status()
+
+
+@app.route("/admin/map/download", methods=["POST"])
+@admin_required
+def admin_map_download():
+    if map_download_status().get("state") == "running":
+        flash("A download is already running.", "error")
+        return redirect(url_for("admin_map"))
+    z = int(parse_float(request.form.get("maxzoom"), 10, 15) or 14)
+    out = map_target()
+    try:
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+        if not os.access(os.path.dirname(out), os.W_OK):
+            raise OSError(f"The app can't write to {os.path.dirname(out)}")
+    except OSError as e:
+        flash(f"{e}. On the server run: sudo chown -R narmada:narmada {os.path.dirname(out)}", "error")
+        return redirect(url_for("admin_map"))
+    subprocess.Popen([sys.executable, os.path.join(BASE_DIR, "tools", "map_download.py"), out, str(z)],
+                     start_new_session=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     close_fds=True)
+    time.sleep(0.5)
+    flash(f"Map download started (zoom up to {z}). You can leave this page – it keeps running.", "ok")
+    return redirect(url_for("admin_map"))
+
+
+@app.route("/admin/map/delete", methods=["POST"])
+@admin_required
+def admin_map_delete():
+    if map_download_status().get("state") == "running":
+        flash("Wait for the download to finish first.", "error")
+    else:
+        for f in (map_target(), os.path.join(os.path.dirname(map_target()), "narmada.json")):
+            try: os.remove(f)
+            except OSError: pass
+        flash("Offline map deleted. The apps now use online OpenStreetMap tiles.", "ok")
+    return redirect(url_for("admin_map"))
 
 
 @app.route("/admin/users")

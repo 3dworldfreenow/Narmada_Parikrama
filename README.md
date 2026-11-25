@@ -131,6 +131,10 @@ Search data © OpenStreetMap contributors (ODbL), via Photon by Komoot.
 
 By default the app shows map images from OpenStreetMap's free tile servers, which only allow light use and forbid bulk downloading. To serve the map from your own server instead (no outside tile server, no API key), download the Narmada region once:
 
+**Easiest: from the website.** Log in as admin → avatar menu → **🗺 Offline map** → choose the detail level → **Download map**. It runs in the background (5–30 minutes), shows progress and a log, and the website and app start using the map as soon as it finishes, with no restart. Use **Update map** monthly for fresh data, or delete it to go back to online tiles. Restarting the app during a download stops it; just start it again.
+
+**Or from the command line:**
+
 ```bash
 sudo bash /opt/narmada/deploy/download-map.sh             # zoom up to 14
 sudo MAXZOOM=13 bash /opt/narmada/deploy/download-map.sh  # smaller file

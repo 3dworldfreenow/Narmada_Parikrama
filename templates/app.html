@@ -38,6 +38,7 @@
       {% if user.role == 'admin' %}
         <a href="{{ url_for('admin_queue') }}">Approvals{% if pending_count %} <span class="pill">{{ pending_count }}</span>{% endif %}</a>
         <a href="{{ url_for('admin_users') }}">Users</a>
+        <a href="{{ url_for('admin_map') }}">🗺 Offline map</a>
       {% endif %}
       <form method="post" action="{{ url_for('logout') }}"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button>Log out</button></form>
     </div>
