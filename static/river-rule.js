@@ -81,6 +81,33 @@
     return out;
   };
 
+  /**
+   * How far (km) the route runs on the wrong bank. `allowed(i, km)` returns the bank the route
+   * should be on at that point. Ghats at the start/end (first/last 2 km) and points on the
+   * water itself (islands, side channels) are ignored. Returns {offKm, marks:[[lat,lng]...]}.
+   */
+  R.offBank = function (coords, allowed) {
+    if (!R.ready || coords.length < 2) return {offKm: 0, marks: []};
+    let total = 0;
+    const cum = [0];
+    for (let i = 1; i < coords.length; i++) { total += kmBetween(coords[i - 1], coords[i]); cum.push(total); }
+    let off = 0, lastSampleKm = -1, inRun = false, runStart = null;
+    const marks = [];
+    for (let i = 0; i < coords.length; i++) {
+      const d = cum[i];
+      if (d < 2 || total - d < 2 || d - lastSampleKm < 0.4) continue;
+      const step = lastSampleKm < 0 ? 0.4 : d - lastSampleKm;
+      lastSampleKm = d;
+      const want = allowed(i, d), here = R.side(coords[i]);
+      const wrong = (here === "north" || here === "south") && (want === "north" || want === "south") && here !== want;
+      if (wrong) { off += step; if (!inRun) { inRun = true; runStart = coords[i]; } }
+      else if (inRun) { inRun = false; if (marks.length < 8) marks.push(runStart); }
+    }
+    if (inRun && marks.length < 8) marks.push(runStart);
+    return {offKm: off, marks};
+  };
+  const legalOn = (r, bank) => R.offBank(r.coords, () => bank).offKm < 1.0;
+
   /** Parikrama stops on each bank, ordered from the sea (west) to the source (east). */
   R.bankChains = function (stops) {
     const on = (st, bank) => stops.filter(o => o.st === st && o.lat != null && [bank, "river", "source", "sea"].includes(R.side([o.lat, o.lng])));
@@ -118,7 +145,9 @@
   R.plan = async function ({a, b, router, rule, stops}) {
     if (!rule || !R.ready) {
       const routes = await osrm(router, [a, b], true);
-      return {status: "free", routes, crossings: R.ready ? R.crossings(routes[0].coords) : []};
+      const sa = R.ready ? R.side(a) : "unknown";
+      const marks = R.ready && (sa === "north" || sa === "south") ? R.offBank(routes[0].coords, () => sa).marks : [];
+      return {status: "free", routes, crossings: marks};
     }
     const sideA = R.side(a), sideB = R.side(b);
     const banks = ["north", "south"];
@@ -126,22 +155,25 @@
       return {status: "opposite", routes: [], crossings: [], sideA, sideB};
     }
     const routes = await osrm(router, [a, b], true);
-    const legal = routes.filter(r => R.crossings(r.coords).length === 0);
-    if (legal.length) return {status: "ok", routes: legal.concat(routes.filter(r => !legal.includes(r))).slice(0, 3), legalCount: legal.length, crossings: [], sideA, sideB};
-    // every road route crosses: force it along this bank through the parikrama stops
-    const bank = banks.includes(sideA) ? sideA : sideB;
-    if (banks.includes(bank)) {
-      const chain = R.bankChains(stops)[bank];
-      const via = viaAlong(chain, a, b, 18);
-      if (via.length) {
-        try {
-          const kept = await osrm(router, [a, ...via, b], false);
-          const cx = R.crossings(kept[0].coords);
-          if (!cx.length) return {status: "kept", routes: kept, crossings: [], sideA, sideB, bank, via: via.length};
-        } catch (e) { /* fall through */ }
-      }
+    const bank = banks.includes(sideA) ? sideA : (banks.includes(sideB) ? sideB : null);
+    if (!bank) {   // both ends on the water / at the source: we can't tell a bank, so just avoid crossing the river line
+      const clean = routes.filter(r => R.crossings(r.coords).length === 0);
+      const use = clean.length ? clean : routes;
+      return {status: clean.length ? "ok" : "crosses", routes: use, crossings: clean.length ? [] : R.crossings(use[0].coords), sideA, sideB};
     }
-    return {status: "crosses", routes, crossings: R.crossings(routes[0].coords), sideA, sideB};
+    const legal = routes.filter(r => legalOn(r, bank));
+    if (legal.length) return {status: "ok", routes: legal.concat(routes.filter(r => !legal.includes(r))).slice(0, 3), legalCount: legal.length, crossings: [], sideA, sideB, bank};
+    // every road route goes over to the other bank: force it along this bank through the parikrama stops
+    const chain = R.bankChains(stops)[bank];
+    for (const n of [18, 30]) {
+      const via = viaAlong(chain, a, b, n);
+      if (!via.length) break;
+      try {
+        const kept = await osrm(router, [a, ...via, b], false);
+        if (legalOn(kept[0], bank)) return {status: "kept", routes: kept, crossings: [], sideA, sideB, bank, via: via.length};
+      } catch (e) { break; }
+    }
+    return {status: "crosses", routes, crossings: R.offBank(routes[0].coords, () => bank).marks, sideA, sideB, bank};
   };
 
   /** Way round to the other bank: which = "source" (via Amarkantak) or "sea" (boat at the mouth). */
@@ -153,7 +185,12 @@
       const endA = A[A.length - 1], endB = B[B.length - 1];
       const via = viaAlong(A, a, [endA.lat, endA.lng], 11).concat(viaAlong(B, [endB.lat, endB.lng], b, 11));
       const r = await osrm(router, [a, ...via, b], false);
-      return {status: "around", which, routes: r, boat: null, crossings: R.crossings(r[0].coords), sideA, sideB};
+      // bank A until the point nearest the source, bank B after it
+      const src = [endA.lat, endA.lng];
+      let turn = 0, best = 1e9;
+      r[0].coords.forEach((c, i) => { const d = kmBetween(c, src); if (d < best) { best = d; turn = i; } });
+      const chk = R.offBank(r[0].coords, i => (i <= turn ? sideA : sideB));
+      return {status: "around", which, routes: r, boat: null, crossings: chk.offKm >= 1 ? chk.marks : [], sideA, sideB};
     }
     // sea: road to this bank's coast, boat across the gulf, road on from the other coast
     const coastA = [A[0].lat, A[0].lng], coastB = [B[0].lat, B[0].lng];
@@ -161,8 +198,10 @@
     const leg2 = (await osrm(router, [coastB, ...viaAlong(B, coastB, b, 11), b], false))[0];
     const joined = {coords: leg1.coords.concat(leg2.coords), distance: leg1.distance + leg2.distance,
       duration: leg1.duration + leg2.duration, steps: leg1.steps.concat(leg2.steps), legs: [leg1, leg2]};
+    const c1 = R.offBank(leg1.coords, () => sideA), c2 = R.offBank(leg2.coords, () => sideB);
+    const marks = (c1.offKm >= 1 ? c1.marks : []).concat(c2.offKm >= 1 ? c2.marks : []);
     return {status: "around", which, routes: [joined], boat: [coastA, coastB], boatKm: kmBetween(coastA, coastB),
-      coastA: A[0].v, coastB: B[0].v, crossings: [], sideA, sideB};
+      coastA: A[0].v, coastB: B[0].v, crossings: marks, sideA, sideB};
   };
 
   R.kmBetween = kmBetween;
