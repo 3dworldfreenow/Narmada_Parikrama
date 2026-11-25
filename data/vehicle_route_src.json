@@ -1,0 +1,1668 @@
+{
+ "title": "Narmada Parikrama – Bike / Four-wheeler Route",
+ "credit": {
+  "by": "Acharya Shri Anildas Yogiraj",
+  "place": "Shri Bhakti Ashram, Gomukh Ghat, Omkareshwar",
+  "phone": [
+   "9981113661",
+   "9165977556"
+  ],
+  "note": "Route list as published by the ashram; translated to English for this guide."
+ },
+ "boat": "The boat from Vimleshwar to Mithitalai runs only from Dussehra to Akshaya Tritiya. Bikes and cars are carried across to Mithitalai for a fee while you travel by boat.",
+ "parts": [
+  {
+   "id": 1,
+   "title": "Omkareshwar → Vimleshwar (sea coast)",
+   "bank": "south",
+   "dir": "west",
+   "stated_km": 616,
+   "stated": "Total to the sea coast: 616 km.",
+   "total_km": 623,
+   "stops": [
+    {
+     "n": "Omkareshwar",
+     "hi": "ओंकारेश्वर",
+     "km": 0,
+     "cum": 0,
+     "note": "",
+     "state": "MP",
+     "q": "Omkareshwar"
+    },
+    {
+     "n": "Toksar",
+     "hi": "टोंकसर",
+     "km": 22,
+     "cum": 22,
+     "note": "",
+     "state": "MP",
+     "q": "Toksar"
+    },
+    {
+     "n": "Raverkhedi",
+     "hi": "रावेरखेड़ी",
+     "km": 15,
+     "cum": 37,
+     "note": "Peshwa Bajirao's samadhi",
+     "state": "MP",
+     "q": "Raverkhedi"
+    },
+    {
+     "n": "Bhatyan Buzurg",
+     "hi": "भट्याण बुजुर्ग",
+     "km": 22,
+     "cum": 59,
+     "note": "",
+     "state": "MP",
+     "q": "Bhatyan Buzurg"
+    },
+    {
+     "n": "Khaltaka",
+     "hi": "खलटांका",
+     "km": 45,
+     "cum": 104,
+     "note": "",
+     "state": "MP",
+     "q": "Khaltaka"
+    },
+    {
+     "n": "Thikri",
+     "hi": "ठीकरी",
+     "km": 11,
+     "cum": 115,
+     "note": "",
+     "state": "MP",
+     "q": "Thikri"
+    },
+    {
+     "n": "Mohipura",
+     "hi": "मोहीपुरा",
+     "km": 33,
+     "cum": 148,
+     "note": "",
+     "state": "MP",
+     "q": "Mohipura"
+    },
+    {
+     "n": "Datwada",
+     "hi": "दतवाड़ा",
+     "km": 6,
+     "cum": 154,
+     "note": "",
+     "state": "MP",
+     "q": "Datwada"
+    },
+    {
+     "n": "Chhota Barda",
+     "hi": "छोटा बड़दा",
+     "km": 6,
+     "cum": 160,
+     "note": "",
+     "state": "MP",
+     "q": "Chhota Barda"
+    },
+    {
+     "n": "Dahi Bayda",
+     "hi": "दही बयड़ा",
+     "km": 5,
+     "cum": 165,
+     "note": "",
+     "state": "MP",
+     "q": "Dahi Bayda"
+    },
+    {
+     "n": "Barwani",
+     "hi": "बड़वानी",
+     "km": 10,
+     "cum": 175,
+     "note": "",
+     "state": "MP",
+     "q": "Barwani"
+    },
+    {
+     "n": "Pati",
+     "hi": "पाटी",
+     "km": 23,
+     "cum": 198,
+     "note": "",
+     "state": "MP",
+     "q": "Pati"
+    },
+    {
+     "n": "Khetia",
+     "hi": "खेतिया",
+     "km": 29,
+     "cum": 227,
+     "note": "",
+     "state": "MP",
+     "q": "Khetia"
+    },
+    {
+     "n": "Brahmanpuri",
+     "hi": "ब्राम्हणपुर",
+     "km": 27,
+     "cum": 254,
+     "note": "",
+     "state": "MH",
+     "q": "Brahmanpuri"
+    },
+    {
+     "n": "Vagvadev",
+     "hi": "वाग्वदेव",
+     "km": 38,
+     "cum": 292,
+     "note": "",
+     "state": "MH",
+     "q": "Vagvadev"
+    },
+    {
+     "n": "Dhadgaon Phata",
+     "hi": "धड़गांव फाटा",
+     "km": 17,
+     "cum": 309,
+     "note": "Turn-off for Dhadgaon",
+     "state": "MH",
+     "q": "Dhadgaon"
+    },
+    {
+     "n": "Molgi",
+     "hi": "मोलगी",
+     "km": 27,
+     "cum": 336,
+     "note": "",
+     "state": "MH",
+     "q": "Molgi"
+    },
+    {
+     "n": "Dumkhal",
+     "hi": "डूमखल",
+     "km": 28,
+     "cum": 364,
+     "note": "",
+     "state": "GJ",
+     "q": "Dumkhal"
+    },
+    {
+     "n": "Dediapada",
+     "hi": "डेडियापाड़ा",
+     "km": 32,
+     "cum": 396,
+     "note": "The Shoolpaneshwar forest stretch ends after this",
+     "state": "GJ",
+     "q": "Dediapada"
+    },
+    {
+     "n": "Rajpipla",
+     "hi": "राजपीपला",
+     "km": 45,
+     "cum": 441,
+     "note": "",
+     "state": "GJ",
+     "q": "Rajpipla"
+    },
+    {
+     "n": "Nani–Moti Panoti",
+     "hi": "नानी मोटी पनोती",
+     "km": 15,
+     "cum": 456,
+     "note": "",
+     "state": "GJ",
+     "q": "Panoti"
+    },
+    {
+     "n": "Kothara",
+     "hi": "कोठारा",
+     "km": 6,
+     "cum": 462,
+     "note": "",
+     "state": "GJ",
+     "q": "Kothara"
+    },
+    {
+     "n": "Poicha",
+     "hi": "पोइचा",
+     "km": 5,
+     "cum": 467,
+     "note": "",
+     "state": "GJ",
+     "q": "Poicha"
+    },
+    {
+     "n": "Sisodara",
+     "hi": "सिसोदरा",
+     "km": 30,
+     "cum": 497,
+     "note": "",
+     "state": "GJ",
+     "q": "Sisodara"
+    },
+    {
+     "n": "Ori",
+     "hi": "ओरी",
+     "km": 5,
+     "cum": 502,
+     "note": "",
+     "state": "GJ",
+     "q": "Ori"
+    },
+    {
+     "n": "Kandroj",
+     "hi": "कांदरोज",
+     "km": 8,
+     "cum": 510,
+     "note": "",
+     "state": "GJ",
+     "q": "Kandroj"
+    },
+    {
+     "n": "Asha",
+     "hi": "अशा",
+     "km": 10,
+     "cum": 520,
+     "note": "",
+     "state": "GJ",
+     "q": "Asha"
+    },
+    {
+     "n": "Jhagadia",
+     "hi": "झगड़िया",
+     "km": 30,
+     "cum": 550,
+     "note": "",
+     "state": "GJ",
+     "q": "Jhagadia"
+    },
+    {
+     "n": "Ankleshwar",
+     "hi": "अंकलेश्वर",
+     "km": 24,
+     "cum": 574,
+     "note": "",
+     "state": "GJ",
+     "q": "Ankleshwar"
+    },
+    {
+     "n": "Ramkund",
+     "hi": "रामकुंड",
+     "km": 7,
+     "cum": 581,
+     "note": "",
+     "state": "GJ",
+     "q": "Ramkund"
+    },
+    {
+     "n": "Balbala Kund",
+     "hi": "बलबला कुंड",
+     "km": 10,
+     "cum": 591,
+     "note": "",
+     "state": "GJ",
+     "q": "Balbala Kund"
+    },
+    {
+     "n": "Hansot",
+     "hi": "हांसोट",
+     "km": 12,
+     "cum": 603,
+     "note": "On the Dandi March route",
+     "state": "GJ",
+     "q": "Hansot"
+    },
+    {
+     "n": "Hanuman Tekri",
+     "hi": "हनुमान टेकरी",
+     "km": 10,
+     "cum": 613,
+     "note": "",
+     "state": "GJ",
+     "q": "Hanuman Tekri"
+    },
+    {
+     "n": "Vimleshwar",
+     "hi": "वमलेश्वर",
+     "km": 10,
+     "cum": 623,
+     "note": "Sea coast. Boat to Mithitalai (see note)",
+     "state": "GJ",
+     "q": "Vimleshwar"
+    }
+   ]
+  },
+  {
+   "id": 2,
+   "title": "Mithitalai → Amarkantak",
+   "bank": "north",
+   "dir": "east",
+   "stated_km": 1775,
+   "stated": "Mithitalai to Amarkantak about 1775 km – north bank, facing east.",
+   "total_km": 1790,
+   "stops": [
+    {
+     "n": "Mithitalai",
+     "hi": "मीठीतलाई",
+     "km": 0,
+     "cum": 0,
+     "note": "Boat landing from Vimleshwar",
+     "state": "GJ",
+     "q": "Mithitalai"
+    },
+    {
+     "n": "Bhadbhuteshwar",
+     "hi": "भाड़भूतेश्वर",
+     "km": 25,
+     "cum": 25,
+     "note": "",
+     "state": "GJ",
+     "q": "Bhadbhuteshwar"
+    },
+    {
+     "n": "Bharuch",
+     "hi": "भरूच",
+     "km": 10,
+     "cum": 35,
+     "note": "",
+     "state": "GJ",
+     "q": "Bharuch"
+    },
+    {
+     "n": "Shuklatirth",
+     "hi": "शुक्लतीर्थ",
+     "km": 16,
+     "cum": 51,
+     "note": "Kabirvad",
+     "state": "GJ",
+     "q": "Shuklatirth"
+    },
+    {
+     "n": "Moti Koral",
+     "hi": "मोटी कोरल",
+     "km": 32,
+     "cum": 83,
+     "note": "Punit Ashram",
+     "state": "GJ",
+     "q": "Moti Koral"
+    },
+    {
+     "n": "Nareshwar",
+     "hi": "नारेश्वर",
+     "km": 7,
+     "cum": 90,
+     "note": "Rang Avadhoot Ashram",
+     "state": "GJ",
+     "q": "Nareshwar"
+    },
+    {
+     "n": "Diver",
+     "hi": "दिवेर",
+     "km": 14,
+     "cum": 104,
+     "note": "",
+     "state": "GJ",
+     "q": "Diver"
+    },
+    {
+     "n": "Malsar",
+     "hi": "मालसर",
+     "km": 13,
+     "cum": 117,
+     "note": "",
+     "state": "GJ",
+     "q": "Malsar"
+    },
+    {
+     "n": "Kanjetha",
+     "hi": "कंजेठा",
+     "km": 8,
+     "cum": 125,
+     "note": "",
+     "state": "GJ",
+     "q": "Kanjetha"
+    },
+    {
+     "n": "Ambali",
+     "hi": "अम्बाली",
+     "km": 6,
+     "cum": 131,
+     "note": "",
+     "state": "GJ",
+     "q": "Ambali"
+    },
+    {
+     "n": "Badrikashram",
+     "hi": "बद्रिकाश्रम",
+     "km": 12,
+     "cum": 143,
+     "note": "",
+     "state": "GJ",
+     "q": "Chandod"
+    },
+    {
+     "n": "Gangnath Mahadev",
+     "hi": "गंगनाथ महादेव",
+     "km": 2,
+     "cum": 145,
+     "note": "",
+     "state": "GJ",
+     "q": "Chandod"
+    },
+    {
+     "n": "Chanod",
+     "hi": "चाणोद",
+     "km": 2,
+     "cum": 147,
+     "note": "",
+     "state": "GJ",
+     "q": "Chanod"
+    },
+    {
+     "n": "Karnali",
+     "hi": "कुबेर भंडारी करनाली",
+     "km": 5,
+     "cum": 152,
+     "note": "Kuber Bhandari temple",
+     "state": "GJ",
+     "q": "Karnali"
+    },
+    {
+     "n": "Tilakwada",
+     "hi": "तिलकवाड़ा",
+     "km": 21,
+     "cum": 173,
+     "note": "",
+     "state": "GJ",
+     "q": "Tilakwada"
+    },
+    {
+     "n": "Garudeshwar",
+     "hi": "गरूड़ेश्वर",
+     "km": 16,
+     "cum": 189,
+     "note": "Vasudevanand Saraswati Swami Ashram",
+     "state": "GJ",
+     "q": "Garudeshwar"
+    },
+    {
+     "n": "Statue of Unity",
+     "hi": "स्टेच्यू ऑफ यूनिटी",
+     "km": 11,
+     "cum": 200,
+     "note": "Valley of Flowers, Sardar Sarovar Dam",
+     "state": "GJ",
+     "q": "Statue of Unity"
+    },
+    {
+     "n": "Kawant",
+     "hi": "कवाँट",
+     "km": 60,
+     "cum": 260,
+     "note": "",
+     "state": "GJ",
+     "q": "Kawant"
+    },
+    {
+     "n": "Hanfeshwar",
+     "hi": "हांफेश्वर",
+     "km": 15,
+     "cum": 275,
+     "note": "The Shoolpaneshwar forest stretch begins again after this",
+     "state": "GJ",
+     "q": "Hanfeshwar"
+    },
+    {
+     "n": "Bakhatgarh",
+     "hi": "बखतगढ़",
+     "km": 29,
+     "cum": 304,
+     "note": "",
+     "state": "MP",
+     "q": "Bakhatgarh"
+    },
+    {
+     "n": "Chhaktala",
+     "hi": "छकतला",
+     "km": 10,
+     "cum": 314,
+     "note": "",
+     "state": "MP",
+     "q": "Chhaktala"
+    },
+    {
+     "n": "Kawada",
+     "hi": "कवड़ा",
+     "km": 38,
+     "cum": 352,
+     "note": "Hanuman temple",
+     "state": "MP",
+     "q": "Kawada"
+    },
+    {
+     "n": "Dahi",
+     "hi": "डही",
+     "km": 13,
+     "cum": 365,
+     "note": "",
+     "state": "MP",
+     "q": "Dahi"
+    },
+    {
+     "n": "Meghnad Ghat",
+     "hi": "मेघनाद घाट",
+     "km": 24,
+     "cum": 389,
+     "note": "The Shoolpaneshwar forest stretch ends",
+     "state": "MP",
+     "q": "Meghnad Ghat"
+    },
+    {
+     "n": "Susari",
+     "hi": "सुसारी",
+     "km": 15,
+     "cum": 404,
+     "note": "",
+     "state": "MP",
+     "q": "Susari"
+    },
+    {
+     "n": "Nisarpur",
+     "hi": "निसरपुर",
+     "km": 11,
+     "cum": 415,
+     "note": "",
+     "state": "MP",
+     "q": "Nisarpur"
+    },
+    {
+     "n": "Bodhwada",
+     "hi": "बोधवाड़ा",
+     "km": 16,
+     "cum": 431,
+     "note": "",
+     "state": "MP",
+     "q": "Bodhwada"
+    },
+    {
+     "n": "Semalda",
+     "hi": "सेमल्दा",
+     "km": 17,
+     "cum": 448,
+     "note": "",
+     "state": "MP",
+     "q": "Semalda"
+    },
+    {
+     "n": "Badgaon Khedi",
+     "hi": "बड़गांव खेड़ी",
+     "km": 6,
+     "cum": 454,
+     "note": "",
+     "state": "MP",
+     "q": "Badgaon Khedi"
+    },
+    {
+     "n": "Ajanda",
+     "hi": "अजन्दा",
+     "km": 7,
+     "cum": 461,
+     "note": "",
+     "state": "MP",
+     "q": "Ajanda"
+    },
+    {
+     "n": "Bakaner",
+     "hi": "बाकानेर",
+     "km": 7,
+     "cum": 468,
+     "note": "",
+     "state": "MP",
+     "q": "Bakaner"
+    },
+    {
+     "n": "Dharampuri",
+     "hi": "धरमपुरी",
+     "km": 24,
+     "cum": 492,
+     "note": "",
+     "state": "MP",
+     "q": "Dharampuri"
+    },
+    {
+     "n": "Mandu (Rewa Kund)",
+     "hi": "मांडू रेवाकुंड",
+     "km": 27,
+     "cum": 519,
+     "note": "Jahaz Mahal, Roopmati Pavilion",
+     "state": "MP",
+     "q": "Mandu"
+    },
+    {
+     "n": "Dhamnod",
+     "hi": "धामनोद",
+     "km": 26,
+     "cum": 545,
+     "note": "",
+     "state": "MP",
+     "q": "Dhamnod"
+    },
+    {
+     "n": "Maheshwar",
+     "hi": "महेश्वर",
+     "km": 13,
+     "cum": 558,
+     "note": "",
+     "state": "MP",
+     "q": "Maheshwar"
+    },
+    {
+     "n": "Mandleshwar",
+     "hi": "मंडलेश्वर",
+     "km": 7,
+     "cum": 565,
+     "note": "",
+     "state": "MP",
+     "q": "Mandleshwar"
+    },
+    {
+     "n": "Barwaha",
+     "hi": "बड़वाह",
+     "km": 41,
+     "cum": 606,
+     "note": "",
+     "state": "MP",
+     "q": "Barwaha"
+    },
+    {
+     "n": "Khedighat",
+     "hi": "खेड़ीघाट",
+     "km": 6,
+     "cum": 612,
+     "note": "",
+     "state": "MP",
+     "q": "Khedighat"
+    },
+    {
+     "n": "Charukeshwar",
+     "hi": "चारूकेश्वर",
+     "km": 2,
+     "cum": 614,
+     "note": "Confluence with the Choral river",
+     "state": "MP",
+     "q": "Charukeshwar"
+    },
+    {
+     "n": "Katkut",
+     "hi": "काटकूट",
+     "km": 30,
+     "cum": 644,
+     "note": "",
+     "state": "MP",
+     "q": "Katkut"
+    },
+    {
+     "n": "Udaynagar",
+     "hi": "उदयनगर",
+     "km": 24,
+     "cum": 668,
+     "note": "",
+     "state": "MP",
+     "q": "Udaynagar"
+    },
+    {
+     "n": "Sitavan, Pipri",
+     "hi": "सीतावन, पीपरी",
+     "km": 20,
+     "cum": 688,
+     "note": "Sita–Valmiki Ashram",
+     "state": "MP",
+     "q": "Pipri"
+    },
+    {
+     "n": "Ratanpur",
+     "hi": "रतनपुर",
+     "km": 10,
+     "cum": 698,
+     "note": "Forest road",
+     "state": "MP",
+     "q": "Ratanpur"
+    },
+    {
+     "n": "Jayanti Mata Falls",
+     "hi": "जयंतिमाता प्रपात",
+     "km": 8,
+     "cum": 706,
+     "note": "Lakadkot forest",
+     "state": "MP",
+     "q": "Jayanti Mata"
+    },
+    {
+     "n": "Pamakhedi",
+     "hi": "पामाखेड़ी",
+     "km": 17,
+     "cum": 723,
+     "note": "",
+     "state": "MP",
+     "q": "Pamakhedi"
+    },
+    {
+     "n": "Dharmeshwar",
+     "hi": "धर्मेश्वर",
+     "km": 15,
+     "cum": 738,
+     "note": "",
+     "state": "MP",
+     "q": "Dharmeshwar"
+    },
+    {
+     "n": "Tipras",
+     "hi": "टिपरास",
+     "km": 19,
+     "cum": 757,
+     "note": "",
+     "state": "MP",
+     "q": "Tipras"
+    },
+    {
+     "n": "Pipalkota",
+     "hi": "पीपलकोटा",
+     "km": 12,
+     "cum": 769,
+     "note": "",
+     "state": "MP",
+     "q": "Pipalkota"
+    },
+    {
+     "n": "Dawta",
+     "hi": "डावटा",
+     "km": 20,
+     "cum": 789,
+     "note": "Bagdi river confluence",
+     "state": "MP",
+     "q": "Dawta"
+    },
+    {
+     "n": "Nemawar",
+     "hi": "नेमावर",
+     "km": 11,
+     "cum": 800,
+     "note": "Narmada Nabhi Tirth – navel of the Narmada",
+     "state": "MP",
+     "q": "Nemawar"
+    },
+    {
+     "n": "Chhipaner",
+     "hi": "छीपानेर",
+     "km": 36,
+     "cum": 836,
+     "note": "",
+     "state": "MP",
+     "q": "Chhipaner"
+    },
+    {
+     "n": "Salkanpur",
+     "hi": "सलकनपुर",
+     "km": 54,
+     "cum": 890,
+     "note": "",
+     "state": "MP",
+     "q": "Salkanpur"
+    },
+    {
+     "n": "Budhni",
+     "hi": "बुधनी",
+     "km": 27,
+     "cum": 917,
+     "note": "",
+     "state": "MP",
+     "q": "Budhni"
+    },
+    {
+     "n": "Bandrabhan",
+     "hi": "बांदराभान",
+     "km": 15,
+     "cum": 932,
+     "note": "",
+     "state": "MP",
+     "q": "Bandrabhan"
+    },
+    {
+     "n": "Jait",
+     "hi": "जैत",
+     "km": 22,
+     "cum": 954,
+     "note": "Village of a former Chief Minister",
+     "state": "MP",
+     "q": "Jait"
+    },
+    {
+     "n": "Nandner",
+     "hi": "नंदनेर",
+     "km": 8,
+     "cum": 962,
+     "note": "",
+     "state": "MP",
+     "q": "Nandner"
+    },
+    {
+     "n": "Dehri",
+     "hi": "डेहरी",
+     "km": 3,
+     "cum": 965,
+     "note": "",
+     "state": "MP",
+     "q": "Dehri"
+    },
+    {
+     "n": "Baktara",
+     "hi": "बक्तारा",
+     "km": 10,
+     "cum": 975,
+     "note": "",
+     "state": "MP",
+     "q": "Baktara"
+    },
+    {
+     "n": "Badi",
+     "hi": "बाड़ी",
+     "km": 18,
+     "cum": 993,
+     "note": "",
+     "state": "MP",
+     "q": "Badi"
+    },
+    {
+     "n": "Bareli",
+     "hi": "बरेली",
+     "km": 20,
+     "cum": 1013,
+     "note": "",
+     "state": "MP",
+     "q": "Bareli"
+    },
+    {
+     "n": "Satrawan",
+     "hi": "सतरावन",
+     "km": 22,
+     "cum": 1035,
+     "note": "Tyagi Ashram, Muwar",
+     "state": "MP",
+     "q": "Satrawan"
+    },
+    {
+     "n": "Aliganj",
+     "hi": "अलीगंज",
+     "km": 20,
+     "cum": 1055,
+     "note": "",
+     "state": "MP",
+     "q": "Aliganj"
+    },
+    {
+     "n": "Ketoghan",
+     "hi": "केतोघन",
+     "km": 16,
+     "cum": 1071,
+     "note": "",
+     "state": "MP",
+     "q": "Ketoghan"
+    },
+    {
+     "n": "Udaipura",
+     "hi": "उदयपुरा",
+     "km": 24,
+     "cum": 1095,
+     "note": "",
+     "state": "MP",
+     "q": "Udaipura"
+    },
+    {
+     "n": "Kelkachh",
+     "hi": "केलकच्छ",
+     "km": 12,
+     "cum": 1107,
+     "note": "",
+     "state": "MP",
+     "q": "Kelkachh"
+    },
+    {
+     "n": "Deori",
+     "hi": "देवरी",
+     "km": 19,
+     "cum": 1126,
+     "note": "",
+     "state": "MP",
+     "q": "Deori"
+    },
+    {
+     "n": "Tendukheda",
+     "hi": "तेंदुखेड़ा",
+     "km": 21,
+     "cum": 1147,
+     "note": "",
+     "state": "MP",
+     "q": "Tendukheda"
+    },
+    {
+     "n": "Lolri",
+     "hi": "लोलरी",
+     "km": 20,
+     "cum": 1167,
+     "note": "",
+     "state": "MP",
+     "q": "Lolri"
+    },
+    {
+     "n": "Barman",
+     "hi": "बरमान",
+     "km": 10,
+     "cum": 1177,
+     "note": "",
+     "state": "MP",
+     "q": "Barman"
+    },
+    {
+     "n": "Gurshi",
+     "hi": "गुरशी",
+     "km": 10,
+     "cum": 1187,
+     "note": "Chhota Dhuandhar falls",
+     "state": "MP",
+     "q": "Gurshi"
+    },
+    {
+     "n": "Bildha",
+     "hi": "बिल्धा",
+     "km": 31,
+     "cum": 1218,
+     "note": "",
+     "state": "MP",
+     "q": "Bildha"
+    },
+    {
+     "n": "Vikramnagar",
+     "hi": "विक्रमनगर",
+     "km": 17,
+     "cum": 1235,
+     "note": "",
+     "state": "MP",
+     "q": "Vikramnagar"
+    },
+    {
+     "n": "Belkheda",
+     "hi": "बेलखेड़ा",
+     "km": 14,
+     "cum": 1249,
+     "note": "",
+     "state": "MP",
+     "q": "Belkheda"
+    },
+    {
+     "n": "Shahpura (Jabalpur)",
+     "hi": "शाहपुरा",
+     "km": 25,
+     "cum": 1274,
+     "note": "",
+     "state": "MP",
+     "q": "Shahpura"
+    },
+    {
+     "n": "Saraswati Ghat",
+     "hi": "सरस्वतीघाट या रविदास घाट",
+     "km": 15,
+     "cum": 1289,
+     "note": "Also called Ravidas Ghat",
+     "state": "MP",
+     "q": "Saraswati Ghat"
+    },
+    {
+     "n": "Kachnar City",
+     "hi": "कचनारसिटी",
+     "km": 5,
+     "cum": 1294,
+     "note": "",
+     "state": "MP",
+     "q": "Kachnar City"
+    },
+    {
+     "n": "Bhadpura",
+     "hi": "भाड़पुरा",
+     "km": 3,
+     "cum": 1297,
+     "note": "Tripura Sundari, Pitambara Peeth",
+     "state": "MP",
+     "q": "Bhedaghat"
+    },
+    {
+     "n": "Lamheta Ghat",
+     "hi": "लम्हेटाघाट",
+     "km": 17,
+     "cum": 1314,
+     "note": "Gwarighat, Ghughra falls",
+     "state": "MP",
+     "q": "Lamheta Ghat"
+    },
+    {
+     "n": "Jabalpur",
+     "hi": "जबलपुर",
+     "km": 14,
+     "cum": 1328,
+     "note": "",
+     "state": "MP",
+     "q": "Jabalpur"
+    },
+    {
+     "n": "Barela",
+     "hi": "बारेला",
+     "km": 21,
+     "cum": 1349,
+     "note": "",
+     "state": "MP",
+     "q": "Barela"
+    },
+    {
+     "n": "Dobhi",
+     "hi": "डोभी",
+     "km": 7,
+     "cum": 1356,
+     "note": "",
+     "state": "MP",
+     "q": "Dobhi"
+    },
+    {
+     "n": "Bijadandi",
+     "hi": "बीजाडांडी",
+     "km": 13,
+     "cum": 1369,
+     "note": "",
+     "state": "MP",
+     "q": "Bijadandi"
+    },
+    {
+     "n": "Kumha",
+     "hi": "कुम्हा",
+     "km": 28,
+     "cum": 1397,
+     "note": "",
+     "state": "MP",
+     "q": "Kumha"
+    },
+    {
+     "n": "Chirai",
+     "hi": "चिरई",
+     "km": 5,
+     "cum": 1402,
+     "note": "",
+     "state": "MP",
+     "q": "Chirai"
+    },
+    {
+     "n": "Barrasagar",
+     "hi": "बर्रासागर",
+     "km": 16,
+     "cum": 1418,
+     "note": "",
+     "state": "MP",
+     "q": "Barrasagar"
+    },
+    {
+     "n": "Mandla",
+     "hi": "मंडला",
+     "km": 15,
+     "cum": 1433,
+     "note": "",
+     "state": "MP",
+     "q": "Mandla"
+    },
+    {
+     "n": "Badi Khairi",
+     "hi": "बड़ी खैरी",
+     "km": 3,
+     "cum": 1436,
+     "note": "",
+     "state": "MP",
+     "q": "Badi Khairi"
+    },
+    {
+     "n": "Amnala",
+     "hi": "अमनाला",
+     "km": 3,
+     "cum": 1439,
+     "note": "",
+     "state": "MP",
+     "q": "Amnala"
+    },
+    {
+     "n": "Kindri",
+     "hi": "किन्दरी",
+     "km": 9,
+     "cum": 1448,
+     "note": "",
+     "state": "MP",
+     "q": "Kindri"
+    },
+    {
+     "n": "Paundi Linga",
+     "hi": "पौंडीलिंगा",
+     "km": 12,
+     "cum": 1460,
+     "note": "",
+     "state": "MP",
+     "q": "Paundi Linga"
+    },
+    {
+     "n": "Niwas",
+     "hi": "निवास",
+     "km": 56,
+     "cum": 1516,
+     "note": "Via Chhota Umaria",
+     "state": "MP",
+     "q": "Niwas"
+    },
+    {
+     "n": "Bijhouli Fossil Park",
+     "hi": "बिझौली फॉजिल्स पार्क",
+     "km": 5,
+     "cum": 1521,
+     "note": "",
+     "state": "MP",
+     "q": "Ghughwa Fossil Park"
+    },
+    {
+     "n": "Shahpura (Dindori)",
+     "hi": "शाहपुरा",
+     "km": 32,
+     "cum": 1553,
+     "note": "",
+     "state": "MP",
+     "q": "Shahpura"
+    },
+    {
+     "n": "Mali",
+     "hi": "माली",
+     "km": 34,
+     "cum": 1587,
+     "note": "",
+     "state": "MP",
+     "q": "Mali"
+    },
+    {
+     "n": "Umaria",
+     "hi": "उमरिया",
+     "km": 29,
+     "cum": 1616,
+     "note": "",
+     "state": "MP",
+     "q": "Umaria"
+    },
+    {
+     "n": "Shahdol",
+     "hi": "शहडोल",
+     "km": 69,
+     "cum": 1685,
+     "note": "",
+     "state": "MP",
+     "q": "Shahdol"
+    },
+    {
+     "n": "Rajendragram",
+     "hi": "राजेन्द्रग्राम",
+     "km": 65,
+     "cum": 1750,
+     "note": "",
+     "state": "MP",
+     "q": "Rajendragram"
+    },
+    {
+     "n": "Podki",
+     "hi": "पोडकी",
+     "km": 24,
+     "cum": 1774,
+     "note": "",
+     "state": "MP",
+     "q": "Podki"
+    },
+    {
+     "n": "Amarkantak",
+     "hi": "अमरकंटक",
+     "km": 16,
+     "cum": 1790,
+     "note": "Source of the Narmada",
+     "state": "MP",
+     "q": "Amarkantak"
+    }
+   ]
+  },
+  {
+   "id": 3,
+   "title": "Amarkantak → Omkareshwar",
+   "bank": "south",
+   "dir": "west",
+   "stated_km": 1040,
+   "stated": "About 1040 km (the list says “Amarkantak to Vimleshwar 1040 km”).",
+   "total_km": 1043,
+   "stops": [
+    {
+     "n": "Amarkantak",
+     "hi": "अमरकंटक",
+     "km": 0,
+     "cum": 0,
+     "note": "Mai ki Bagiya, Gaumukh, Kabir Chabutra and more",
+     "state": "MP",
+     "q": "Amarkantak"
+    },
+    {
+     "n": "Karanjia",
+     "hi": "करंजिया",
+     "km": 25,
+     "cum": 25,
+     "note": "",
+     "state": "MP",
+     "q": "Karanjia"
+    },
+    {
+     "n": "Dhawadongri",
+     "hi": "धावाडोंगरी",
+     "km": 35,
+     "cum": 60,
+     "note": "",
+     "state": "MP",
+     "q": "Dhawadongri"
+    },
+    {
+     "n": "Gadhsarai",
+     "hi": "गढ़सराय",
+     "km": 10,
+     "cum": 70,
+     "note": "",
+     "state": "MP",
+     "q": "Gadhsarai"
+    },
+    {
+     "n": "Dindori",
+     "hi": "डिंडौरी",
+     "km": 31,
+     "cum": 101,
+     "note": "",
+     "state": "MP",
+     "q": "Dindori"
+    },
+    {
+     "n": "Devnala Falls",
+     "hi": "देवनाला प्रपात",
+     "km": 25,
+     "cum": 126,
+     "note": "",
+     "state": "MP",
+     "q": "Devnala"
+    },
+    {
+     "n": "Chabhi",
+     "hi": "चाभी",
+     "km": 25,
+     "cum": 151,
+     "note": "",
+     "state": "MP",
+     "q": "Chabhi"
+    },
+    {
+     "n": "Chikhli",
+     "hi": "चिखली",
+     "km": 46,
+     "cum": 197,
+     "note": "",
+     "state": "MP",
+     "q": "Chikhli"
+    },
+    {
+     "n": "Madhupuri",
+     "hi": "मधुपुरी",
+     "km": 10,
+     "cum": 207,
+     "note": "",
+     "state": "MP",
+     "q": "Madhupuri"
+    },
+    {
+     "n": "Jargi",
+     "hi": "जरगी",
+     "km": 27,
+     "cum": 234,
+     "note": "",
+     "state": "MP",
+     "q": "Jargi"
+    },
+    {
+     "n": "Ghansaur",
+     "hi": "घनसौर",
+     "km": 36,
+     "cum": 270,
+     "note": "",
+     "state": "MP",
+     "q": "Ghansaur"
+    },
+    {
+     "n": "Diwari",
+     "hi": "दिवारी",
+     "km": 21,
+     "cum": 291,
+     "note": "",
+     "state": "MP",
+     "q": "Diwari"
+    },
+    {
+     "n": "Payli",
+     "hi": "पायली",
+     "km": 6,
+     "cum": 297,
+     "note": "Bargi Dam",
+     "state": "MP",
+     "q": "Payli"
+    },
+    {
+     "n": "Tuniya",
+     "hi": "टुनिया",
+     "km": 8,
+     "cum": 305,
+     "note": "",
+     "state": "MP",
+     "q": "Tuniya"
+    },
+    {
+     "n": "Mangeli",
+     "hi": "मंगेली",
+     "km": 25,
+     "cum": 330,
+     "note": "",
+     "state": "MP",
+     "q": "Mangeli"
+    },
+    {
+     "n": "Tilwara",
+     "hi": "तिलवारा",
+     "km": 24,
+     "cum": 354,
+     "note": "",
+     "state": "MP",
+     "q": "Tilwara"
+    },
+    {
+     "n": "Siwani",
+     "hi": "सिवनी",
+     "km": 15,
+     "cum": 369,
+     "note": "",
+     "state": "MP",
+     "q": "Siwani"
+    },
+    {
+     "n": "Nanhakheda",
+     "hi": "नान्हाखेड़ा",
+     "km": 10,
+     "cum": 379,
+     "note": "Shantidham Gangai",
+     "state": "MP",
+     "q": "Nanhakheda"
+    },
+    {
+     "n": "Ghughari",
+     "hi": "घुघारी",
+     "km": 10,
+     "cum": 389,
+     "note": "",
+     "state": "MP",
+     "q": "Ghughari"
+    },
+    {
+     "n": "Chargaon",
+     "hi": "चारगांव",
+     "km": 10,
+     "cum": 399,
+     "note": "",
+     "state": "MP",
+     "q": "Chargaon"
+    },
+    {
+     "n": "Gotegaon",
+     "hi": "गोटेगांव",
+     "km": 18,
+     "cum": 417,
+     "note": "",
+     "state": "MP",
+     "q": "Gotegaon"
+    },
+    {
+     "n": "Narsinghpur",
+     "hi": "नरसिंहपुर",
+     "km": 37,
+     "cum": 454,
+     "note": "",
+     "state": "MP",
+     "q": "Narsinghpur"
+    },
+    {
+     "n": "Barman",
+     "hi": "बरमान",
+     "km": 35,
+     "cum": 489,
+     "note": "",
+     "state": "MP",
+     "q": "Barman"
+    },
+    {
+     "n": "Linga",
+     "hi": "लिंगा",
+     "km": 9,
+     "cum": 498,
+     "note": "",
+     "state": "MP",
+     "q": "Linga"
+    },
+    {
+     "n": "Khulri",
+     "hi": "खुलरी",
+     "km": 10,
+     "cum": 508,
+     "note": "",
+     "state": "MP",
+     "q": "Khulri"
+    },
+    {
+     "n": "Bohani",
+     "hi": "बोहानी",
+     "km": 12,
+     "cum": 520,
+     "note": "",
+     "state": "MP",
+     "q": "Bohani"
+    },
+    {
+     "n": "Saikheda",
+     "hi": "साईखेड़ा",
+     "km": 25,
+     "cum": 545,
+     "note": "",
+     "state": "MP",
+     "q": "Saikheda"
+    },
+    {
+     "n": "Tumda",
+     "hi": "तूमड़ा",
+     "km": 5,
+     "cum": 550,
+     "note": "",
+     "state": "MP",
+     "q": "Tumda"
+    },
+    {
+     "n": "Bankhedi",
+     "hi": "बनखेड़ी",
+     "km": 52,
+     "cum": 602,
+     "note": "",
+     "state": "MP",
+     "q": "Bankhedi"
+    },
+    {
+     "n": "Pipariya",
+     "hi": "पिपरिया",
+     "km": 20,
+     "cum": 622,
+     "note": "",
+     "state": "MP",
+     "q": "Pipariya"
+    },
+    {
+     "n": "Shobhapur",
+     "hi": "शोभापुर",
+     "km": 10,
+     "cum": 632,
+     "note": "",
+     "state": "MP",
+     "q": "Shobhapur"
+    },
+    {
+     "n": "Sohagpur",
+     "hi": "सोहागपुर",
+     "km": 11,
+     "cum": 643,
+     "note": "",
+     "state": "MP",
+     "q": "Sohagpur"
+    },
+    {
+     "n": "Semri",
+     "hi": "सेमरी",
+     "km": 12,
+     "cum": 655,
+     "note": "",
+     "state": "MP",
+     "q": "Semri"
+    },
+    {
+     "n": "Babai",
+     "hi": "बाबई",
+     "km": 15,
+     "cum": 670,
+     "note": "Village of the poet Makhanlal Chaturvedi",
+     "state": "MP",
+     "q": "Babai"
+    },
+    {
+     "n": "Narmadapuram (Hoshangabad)",
+     "hi": "होशंगाबाद",
+     "km": 23,
+     "cum": 693,
+     "note": "",
+     "state": "MP",
+     "q": "Narmadapuram"
+    },
+    {
+     "n": "Khoksar",
+     "hi": "खोकसर",
+     "km": 22,
+     "cum": 715,
+     "note": "",
+     "state": "MP",
+     "q": "Khoksar"
+    },
+    {
+     "n": "Nanpa",
+     "hi": "नानपा",
+     "km": 9,
+     "cum": 724,
+     "note": "",
+     "state": "MP",
+     "q": "Nanpa"
+    },
+    {
+     "n": "Aanwlighat",
+     "hi": "आँवलीघाट",
+     "km": 9,
+     "cum": 733,
+     "note": "",
+     "state": "MP",
+     "q": "Aanwlighat"
+    },
+    {
+     "n": "Seoni Malwa",
+     "hi": "सिवनी मालवा",
+     "km": 31,
+     "cum": 764,
+     "note": "",
+     "state": "MP",
+     "q": "Seoni Malwa"
+    },
+    {
+     "n": "Harda",
+     "hi": "हरदा",
+     "km": 41,
+     "cum": 805,
+     "note": "",
+     "state": "MP",
+     "q": "Harda"
+    },
+    {
+     "n": "Handia",
+     "hi": "हंडिया",
+     "km": 22,
+     "cum": 827,
+     "note": "",
+     "state": "MP",
+     "q": "Handia"
+    },
+    {
+     "n": "Khirkiya",
+     "hi": "खिरकिया",
+     "km": 68,
+     "cum": 895,
+     "note": "",
+     "state": "MP",
+     "q": "Khirkiya"
+    },
+    {
+     "n": "Chhanera",
+     "hi": "छनेरा",
+     "km": 47,
+     "cum": 942,
+     "note": "",
+     "state": "MP",
+     "q": "Chhanera"
+    },
+    {
+     "n": "Singaji Samadhi",
+     "hi": "सिंगाजी समाधि",
+     "km": 10,
+     "cum": 952,
+     "note": "",
+     "state": "MP",
+     "q": "Singaji"
+    },
+    {
+     "n": "Mundi",
+     "hi": "मूँदी",
+     "km": 27,
+     "cum": 979,
+     "note": "",
+     "state": "MP",
+     "q": "Mundi"
+    },
+    {
+     "n": "Sanawad",
+     "hi": "सनावद",
+     "km": 52,
+     "cum": 1031,
+     "note": "",
+     "state": "MP",
+     "q": "Sanawad"
+    },
+    {
+     "n": "Omkareshwar",
+     "hi": "ओंकारेश्वर",
+     "km": 12,
+     "cum": 1043,
+     "note": "Parikrama complete",
+     "state": "MP",
+     "q": "Omkareshwar"
+    }
+   ]
+  }
+ ]
+}

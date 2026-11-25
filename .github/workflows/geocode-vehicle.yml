@@ -1,0 +1,27 @@
+name: Place bike/car route stops on the map
+
+on:
+  push:
+    branches: [main]
+    paths: ["tools/geocode_vehicle.py", "data/vehicle_route_src.json", ".github/workflows/geocode-vehicle.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  geocode:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Find each stop on OpenStreetMap (1 request per second)
+        run: python3 tools/geocode_vehicle.py
+      - name: Save it in the repository
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/vehicle_route.json
+          git diff --cached --quiet && { echo "No change."; exit 0; }
+          git commit -m "Place bike/car route stops on the map (OpenStreetMap Nominatim)"
+          git pull --rebase
+          git push
