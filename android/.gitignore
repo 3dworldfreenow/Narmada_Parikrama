@@ -7,3 +7,5 @@ app/src/main/assets/www/app.css
 app/src/main/assets/www/seed-stops.js
 *.iml
 .idea/
+app/src/main/assets/www/river-rule.js
+app/src/main/assets/www/river-data.js

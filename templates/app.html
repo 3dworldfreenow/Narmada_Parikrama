@@ -113,6 +113,8 @@ const REPORT_KINDS = {{ report_kinds|tojson }}, REPORT_RADIUS = {{ report_radius
 const URLS_EXTRA = {reports: {{ url_for('api_reports')|tojson }}};
 const STAGES = {1:{n:"Stage 1",b:"South bank",c:"#0f6e77"}, 2:{n:"Stage 2",b:"North bank",c:"#c8641e"}, 3:{n:"Stage 3",b:"South bank",c:"#7a4fb0"}};
 </script>
+<script src="{{ url_for('river_data') }}"></script>
+<script src="{{ url_for('static', filename='river-rule.js') }}"></script>
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>

@@ -7,6 +7,8 @@ on:
       - "android/**"
       - "static/app.css"
       - "data/stops.json"
+      - "data/narmada_river.json"
+      - "static/river-rule.js"
       - ".github/workflows/android.yml"
   workflow_dispatch:
 
@@ -35,6 +37,8 @@ jobs:
           WWW=android/app/src/main/assets/www
           mkdir -p $WWW/lib
           cp static/app.css $WWW/app.css
+          cp static/river-rule.js $WWW/river-rule.js
+          echo "window.RIVER=$(cat data/narmada_river.json);" > $WWW/river-data.js
           python3 - <<'PY'
           import json
           d = json.load(open("data/stops.json", encoding="utf-8"))

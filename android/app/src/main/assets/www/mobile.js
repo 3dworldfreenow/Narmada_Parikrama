@@ -277,6 +277,7 @@
     dir.from = from || {label: "My location", me: true}; dir.to = to;
     $("#dirView").innerHTML = `<div class="dhead">${backBtn()}<h2 style="font-size:20px">Directions</h2>
       <div class="modes">${Object.keys(MODE).map(m => `<button data-mode="${m}" aria-selected="${m === dir.mode}">${MODE[m]}</button>`).join("")}</div>
+      <label class="rulechip"><input type="checkbox" id="ruleT" ${RULE ? "checked" : ""}> 🕉 Parikrama rule: don't cross the Narmada</label>
       <div class="endpoints"><div class="ep"><span class="epdot a"></span><input id="fromIn" placeholder="Start"><button class="epbtn" data-me="from">◎</button><button class="epbtn" data-pick="from">⌖</button></div>
       <div class="ep"><span class="epdot b"></span><input id="toIn" placeholder="Destination"><button class="epbtn" data-me="to">◎</button><button class="epbtn" data-pick="to">⌖</button></div>
       <button class="swap" id="swap">⇅</button><div class="results inpanel" id="epResults" hidden></div></div></div><div class="dbody" id="dirOut"></div>`;
@@ -288,6 +289,7 @@
     $$("#dirView [data-me]").forEach(b => b.onclick = () => { dir[b.dataset.me] = {label: "My location", me: true}; fill(); route(); });
     $$("#dirView [data-pick]").forEach(b => b.onclick = () => { const k = b.dataset.pick; toast("Tap the map"); setSheet("min"); pickMode = (la, ln) => { dir[k] = {label: `Pin ${la.toFixed(4)}, ${ln.toFixed(4)}`, lat: la, lng: ln}; fill(); setSheet("half"); route(); }; });
     $("#swap").onclick = () => { [dir.from, dir.to] = [dir.to, dir.from]; fill(); route(); };
+    $("#ruleT").onchange = e => { RULE = e.target.checked; store.set("riverRule", RULE); route(); };
     $$("#dirView [data-mode]").forEach(b => b.onclick = () => { dir.mode = b.dataset.mode; $$("#dirView [data-mode]").forEach(x => x.setAttribute("aria-selected", x === b)); route(); });
     route();
   }
@@ -296,6 +298,31 @@
     switch (m.type) { case "depart": return s.name ? `Start on ${n}` : "Start"; case "arrive": return "You have arrived";
       case "turn": case "end of road": return `Turn ${mod} onto ${n}`; case "fork": return `Keep ${mod} at the fork`;
       case "roundabout": case "rotary": return `At the roundabout take exit ${m.exit || ""}`; default: return `Continue${mod ? " " + mod : ""} on ${n}`; } }
+  // ---- parikrama rule: never cross the Narmada (river-rule.js + river-data.js bundled in the app)
+  let RULE = store.get("riverRule", true);
+  const RR = window.RiverRule && window.RIVER && window.RiverRule.init(window.RIVER) ? window.RiverRule : null;
+  const BANK = {north: "north (uttar) bank", south: "south (dakshin) bank"};
+  const X_ICON = L.divIcon({className: "", iconSize: [26, 26], iconAnchor: [13, 13], html: '<div class="xmark">✕</div>'});
+  function drawRoutes(routes, a, b, crossings, boat) {
+    layers.road.clearLayers(); layers.pin.clearLayers();
+    routes.slice(1).forEach(alt => L.polyline(alt.coords, {color: "#7f9cc9", weight: 5, opacity: .6}).addTo(layers.road));
+    const best = routes[0], parts = best.legs ? best.legs.map(l => l.coords) : [best.coords];
+    parts.forEach(c => L.polyline(c, {color: "#1a73e8", weight: 6}).addTo(layers.road));
+    if (boat) L.polyline(boat, {color: "#0f6e77", weight: 4, dashArray: "2 10"}).addTo(layers.road);
+    (crossings || []).forEach(x => L.marker(x, {icon: X_ICON}).addTo(layers.road));
+    L.marker(b, {icon: L.divIcon({className: "", iconSize: [28, 40], iconAnchor: [14, 38], html: PIN})}).addTo(layers.road);
+    map.fitBounds(parts.flat().concat(boat || []), {padding: [60, 60]});
+    return best;
+  }
+  function routeHtml(best, a, b, note) {
+    const steps = best.steps.filter(s => s.distance > 0 || s.maneuver.type === "arrive");
+    const g = `https://www.google.com/maps/dir/?api=1&origin=${a[0]},${a[1]}&destination=${b[0]},${b[1]}&travelmode=${GMODE[dir.mode]}`;
+    setTimeout(() => { const gn = $("#gnav"); if (gn) gn.onclick = () => NATIVE ? NATIVE.openExternal(g) : window.open(g); }, 0);
+    return `<div class="routesum"><span class="rtime">${fmtTime(best.duration * (dir.mode === "bike" ? .85 : 1))}</span> <span class="rdist">(${fmtKm(best.distance / 1000)})</span><small>${MODE[dir.mode]} · by road, OpenStreetMap</small></div>
+      ${note || ""}<div class="actions" style="margin-bottom:10px"><button class="btn2" id="gnav">▶ Start in Google Maps</button></div>
+      ${RULE ? `<p class="hintline">Google Maps may pick a road that crosses the river – follow the blue line here.</p>` : ""}
+      <ol class="steps">${steps.slice(0, 60).map(s => `<li><span class="si">↑</span><span>${stepText(s)}</span><small>${s.distance ? fmtKm(s.distance / 1000) : ""}</small></li>`).join("")}</ol>`;
+  }
   let rSeq = 0;
   async function route() {
     const out = $("#dirOut"); if (!out) return;
@@ -303,25 +330,44 @@
     const [a, b] = await Promise.all([resolvePt(dir.from), resolvePt(dir.to)]);
     if (!a || !b) { out.innerHTML = `<div class="empty">Turn on location to use “My location”.</div>`; return; }
     layers.road.clearLayers();
-    const straight = km(a, b);
+    const sA = RR ? RR.side(a) : "unknown", sB = RR ? RR.side(b) : "unknown";
+    const opposite = RULE && BANK[sA] && BANK[sB] && sA !== sB;
     if (!online()) {
       L.polyline([a, b], {color: "#1a73e8", weight: 4, dashArray: "8 8"}).addTo(layers.road); map.fitBounds([a, b], {padding: [60, 60]});
-      out.innerHTML = `<div class="note">You're offline. Road directions need internet.</div><p>Straight-line distance: <b>${fmtKm(straight)}</b>. Check the stop's “Path to next stop” and path reports.</p>`; return;
+      out.innerHTML = `<div class="note">You're offline. Road directions need internet.</div>
+        ${opposite ? `<div class="note rule">🕉 ${esc(dir.to.label)} is on the ${BANK[sB]}; you are on the ${BANK[sA]}. The parikrama does not cross the Narmada – go round via Amarkantak or the sea crossing.</div>` : ""}
+        <p>Straight-line distance: <b>${fmtKm(km(a, b))}</b>.</p>`; return;
     }
     const seq = ++rSeq; out.innerHTML = `<div class="empty">Finding the best ${MODE[dir.mode]} route…</div>`;
     try {
-      const j = await (await fetch(`${ROUTERS[dir.mode]}${a[1]},${a[0]};${b[1]},${b[0]}?overview=full&geometries=geojson&steps=true&alternatives=true`)).json();
-      if (seq !== rSeq) return; if (j.code !== "Ok") throw new Error();
-      j.routes.slice(1).forEach(alt => L.geoJSON(alt.geometry, {style: {color: "#7f9cc9", weight: 5, opacity: .6}}).addTo(layers.road));
-      const best = j.routes[0], line = L.geoJSON(best.geometry, {style: {color: "#1a73e8", weight: 6}}).addTo(layers.road);
-      L.marker(b, {icon: L.divIcon({className: "", iconSize: [28, 40], iconAnchor: [14, 38], html: PIN})}).addTo(layers.road);
-      map.fitBounds(line.getBounds(), {padding: [60, 60]});
-      const steps = best.legs.flatMap(l => l.steps).filter(s => s.distance > 0 || s.maneuver.type === "arrive");
-      const g = `https://www.google.com/maps/dir/?api=1&origin=${a[0]},${a[1]}&destination=${b[0]},${b[1]}&travelmode=${GMODE[dir.mode]}`;
-      out.innerHTML = `<div class="routesum"><span class="rtime">${fmtTime(best.duration * (dir.mode === "bike" ? .85 : 1))}</span> <span class="rdist">(${fmtKm(best.distance / 1000)})</span><small>${MODE[dir.mode]} · by road, OpenStreetMap</small></div>
-        <div class="actions" style="margin-bottom:10px"><button class="btn2" id="gnav">▶ Start in Google Maps</button></div>
-        <ol class="steps">${steps.map(s => `<li><span class="si">↑</span><span>${stepText(s)}</span><small>${s.distance ? fmtKm(s.distance / 1000) : ""}</small></li>`).join("")}</ol>`;
-      $("#gnav").onclick = () => NATIVE ? NATIVE.openExternal(g) : window.open(g);
+      const plan = RR ? await RR.plan({a, b, router: ROUTERS[dir.mode], rule: RULE, stops: DATA}) : null;
+      if (seq !== rSeq) return;
+      if (!plan) throw new Error("no river data");
+      if (plan.status === "opposite") {
+        out.innerHTML = `<div class="note rule">🕉 <b>${esc(dir.to.label)}</b> is on the ${BANK[plan.sideB]}; you start on the ${BANK[plan.sideA]}. The parikrama never crosses the Narmada. Go round:</div>
+          <div class="actions"><button class="btn2" data-around="source">Via Amarkantak (source)</button><button class="btn2 alt" data-around="sea">Via sea crossing (boat)</button></div>
+          <div class="actions"><button class="btn2 alt" data-around="direct">Direct road anyway</button></div><div id="aroundOut"></div>`;
+        out.querySelectorAll("[data-around]").forEach(btn => btn.onclick = async () => {
+          const box = $("#aroundOut"); box.innerHTML = `<div class="empty">Planning…</div>`;
+          try {
+            if (btn.dataset.around === "direct") {
+              const p2 = await RR.plan({a, b, router: ROUTERS[dir.mode], rule: false, stops: DATA});
+              box.innerHTML = routeHtml(drawRoutes(p2.routes, a, b, p2.crossings), a, b, `<div class="note warn">⚠ Crosses the Narmada ${p2.crossings.length} time(s) (✕). Not allowed during parikrama.</div>`); return;
+            }
+            const r = await RR.planAround({a, b, router: ROUTERS[dir.mode], stops: DATA, which: btn.dataset.around});
+            const note = r.which === "source" ? `<div class="note ok">✓ Round the source at Amarkantak.</div>`
+              : `<div class="note ok">✓ Road to ${esc(r.coastA)}, <b>boat across the Gulf (~${Math.round(r.boatKm)} km, not in the time)</b> to ${esc(r.coastB)}, then road. Ask locally for boat timings.</div>`;
+            box.innerHTML = routeHtml(drawRoutes(r.routes, a, b, r.crossings, r.boat), a, b, note);
+          } catch (e) { box.innerHTML = `<div class="empty">Couldn't plan that right now.</div>`; }
+        });
+        return;
+      }
+      const notes = {
+        ok: BANK[plan.sideA] && plan.sideA === plan.sideB ? `<div class="note ok">✓ Stays on the ${BANK[plan.sideA]}.</div>` : `<div class="note ok">✓ Does not cross the Narmada.</div>`,
+        kept: `<div class="note ok">✓ Kept on the ${BANK[plan.bank]} through ${plan.via} parikrama stops.</div>`,
+        crosses: `<div class="note warn">⚠ Every road found crosses the Narmada (✕). Follow the parikrama path and ask locally.</div>`,
+        free: plan.crossings.length ? `<div class="note">Crosses the Narmada ${plan.crossings.length} time(s).</div>` : ""};
+      out.innerHTML = routeHtml(drawRoutes(plan.routes, a, b, ["crosses", "free"].includes(plan.status) ? plan.crossings : []), a, b, notes[plan.status]);
     } catch (e) { out.innerHTML = `<div class="empty">No ${MODE[dir.mode]} route found. Try another mode.</div>`; }
   }
   $("#dirOpen").onclick = e => { e.preventDefault(); e.stopPropagation(); openDirections(null, null); };

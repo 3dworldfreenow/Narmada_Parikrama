@@ -607,6 +607,22 @@ def stop_detail(stop_id):
                            mine=decode(mine), gallery=gallery, mine_media=mine_media)
 
 
+RIVER_FILE = os.path.join(BASE_DIR, "data", "narmada_river.json")
+
+
+@app.route("/river-data.js")
+def river_data():
+    """The Narmada's course (from OpenStreetMap) for the 'don't cross the river' rule."""
+    try:
+        with open(RIVER_FILE, encoding="utf-8") as fh:
+            body = "window.RIVER=" + fh.read().strip() + ";"
+    except OSError:
+        body = "window.RIVER=null;"
+    resp = app.response_class(body, mimetype="application/javascript")
+    resp.headers["Cache-Control"] = "private, max-age=86400"
+    return resp
+
+
 @app.route("/tiles/narmada.pmtiles")
 def map_tiles():
     """The offline map file. Browsers read small pieces of it (HTTP Range requests)."""
