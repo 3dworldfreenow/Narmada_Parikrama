@@ -94,7 +94,8 @@
   function logout(expired) {
     if (!expired && TOKEN && online()) api("/auth/logout", {method: "POST"}).catch(() => {});
     TOKEN = null; ME = null; store.del("token"); store.del("me");
-    if (NATIVE) { if (NATIVE.setAuth) NATIVE.setAuth("", "", false); NATIVE.stopTracking(); }
+    if (NATIVE) { if (NATIVE.setAuth) NATIVE.setAuth("", "", false, false); NATIVE.stopTracking(); }
+    store.set("family", null); store.set("notifySince", null);
     showAuth(); if (expired) $("#authErr").textContent = "Your login expired. Please log in again.";
   }
 
@@ -122,7 +123,7 @@
       L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 19, attribution: ATTR}).addTo(map);
       if (!online()) setTimeout(() => toast("No offline map yet – open ☰ Menu → Offline map when you have Wi-Fi."), 1500);
     }
-    ["route", "paths", "stops", "reports", "photos", "people", "road", "pin", "track"].forEach(k => layers[k] = L.layerGroup().addTo(map));
+    ["route", "paths", "stops", "reports", "photos", "people", "family", "road", "pin", "track"].forEach(k => layers[k] = L.layerGroup().addTo(map));
     map.on("click", e => {
       const {lat, lng} = e.latlng;
       if (pickMode) { const f = pickMode; pickMode = null; f(lat, lng); return; }
@@ -603,6 +604,8 @@
       const rep = await apiJSON("/reports"); REPORTS = rep.reports; REPORT_KINDS = rep.kinds; store.set("reports", REPORTS); store.set("reportKinds", REPORT_KINDS); drawReports();
       await loadOnline();
       await loadPaths().catch(() => {});
+      await loadFamily().catch(() => {});
+      await checkNotify().catch(() => {});
       store.set("lastSync", Date.now());
       if (manual) toast("Synced ✓");
     } catch (e) { if (manual) toast(e.message || "Sync failed"); }
@@ -615,7 +618,8 @@
   async function loadOnline() {
     const j = await apiJSON("/online"); const list = j.online || [];
     $("#onlineCount").textContent = list.length; layers.people.clearLayers();
-    list.forEach(u => { if (u.lat == null || u.me) return;
+    const fam = new Set(((typeof FAMILY !== "undefined" && FAMILY.members) || []).map(m => m.u));   // family has its own exact marker
+    list.forEach(u => { if (u.lat == null || u.me || fam.has(u.u)) return;
       L.marker([u.lat, u.lng], {icon: personIcon(u), zIndexOffset: u.live ? 500 : 0}).bindTooltip(personTip(u)).addTo(layers.people); });
     $("#onlineList").innerHTML = list.map(u => `<div class="ou" data-lat="${u.lat ?? ""}" data-lng="${u.lng ?? ""}"><div class="av" style="background:${hue(u.u)}">${esc(u.u[0].toUpperCase())}</div><div><b>@${esc(u.u)}</b>${u.me ? " <small>(you)</small>" : ""}<br><small>${u.live ? "🔴 " : ""}${agoText(u)}${u.live ? " · live location" : ""}</small></div></div>`).join("") || `<div class="empty">No one else online.</div>`;
   }
@@ -625,6 +629,11 @@
   // Every photo is stamped (place, GPS, phone date/time, @user), kept on this phone and saved to the gallery.
   // Public ones are also sent to the server and appear on everyone's map when zoomed in; private ones never leave the phone.
   const PHOTO_ZOOM = 12;
+  // who can see a photo: me (only this phone) · family (my family circle) · public (everyone, on the map)
+  const VIS = {me: {i: "🔒", t: "Only me", d: "Stays on this phone"}, family: {i: "👨‍👩‍👧", t: "Family", d: "Sent straight to your family – they get a notification"},
+               public: {i: "🌍", t: "Public", d: "Everyone sees it on the map when they zoom in here"}};
+  const visOf = r => r.vis || (r.public ? "public" : "me");
+  const defaultVis = () => store.get("photoVis", store.get("photoPublic", false) ? "public" : "me");
   let LOCAL_PHOTOS = [], SERVER_PHOTOS = store.get("photosCache", []), thumbURLs = {};
   const blobURL = (id, blob) => thumbURLs[id] || (thumbURLs[id] = URL.createObjectURL(blob));
   const dayOf = ts => new Date(ts).toLocaleDateString("en-CA");          // YYYY-MM-DD in the phone's time zone
@@ -679,49 +688,59 @@
     return {blob, thumb: await toBlob(tc, 0.8), near: near ? near.name : "", w, h};
   }
 
-  async function takePhoto(file) {
+  async function takePhoto(file, req) {
     toast("Adding place and time…");
     const ts = Date.now(), fix = await fixForPhoto();
     let shot; try { shot = await stampPhoto(file, fix, ts); } catch (e) { return toast("Could not read the photo."); }
-    const url = URL.createObjectURL(shot.blob), canPublic = !!fix, pub = canPublic && store.get("photoPublic", false);
+    const url = URL.createObjectURL(shot.blob), canShare = !!fix;
+    let vis = !canShare ? "me" : (req ? (defaultVis() === "public" ? "public" : "family") : defaultVis());
     $("#photoView").innerHTML = `<div class="dhead">${backBtn("Cancel")}<h2 style="font-size:20px">📷 New photo</h2>
         <div class="sub">${fix ? `±${Math.round(fix.acc || 0)} m · ${esc(shot.near || "on the parikrama")}` : "⚠ No GPS fix – the photo is saved but can't go on the map"}</div></div>
       <div class="dbody"><img class="phprev" src="${url}" alt="Your photo with place and time">
         <label class="lbl2" for="phCap">Caption (optional)</label><input id="phCap" maxlength="300" placeholder="e.g. Morning aarti at the ghat">
-        <div class="mrow"><span class="mi">🌍</span><div><b>Public</b><small id="phWho">${pub ? "Everyone sees it on the map when they zoom in here" : "Only you – stays on this phone"}</small></div>
-          <button class="toggle${pub ? " on" : ""}" id="phPub" ${canPublic ? "" : "disabled"} aria-label="Make photo public"></button></div>
+        ${req ? `<div class="note ok">📷 For @${esc(req.u)}, who asked for a photo</div>` : ""}
+        <div class="lbl2">Who can see it</div>
+        <div class="seg" id="phVis" role="radiogroup">${Object.entries(VIS).map(([k, v]) => `<button role="radio" data-vis="${k}" aria-checked="${k === vis}" ${!canShare && k !== "me" ? "disabled" : ""}>${v.i} ${v.t}</button>`).join("")}</div>
+        <small class="hintline" id="phWho">${VIS[vis].d}</small>
         <div class="actions"><button class="btn2" id="phSave">Save photo</button><button class="btn2 alt" id="phRetake">Retake</button></div>
         <p class="hintline">Saved to your gallery (Pictures › Narmada Parikrama) and your timeline.</p></div>`;
     show("photoView"); setSheet("full");
-    $("#phPub").onclick = () => { const on = !$("#phPub").classList.contains("on"); $("#phPub").classList.toggle("on", on); store.set("photoPublic", on);
-      $("#phWho").textContent = on ? "Everyone sees it on the map when they zoom in here" : "Only you – stays on this phone"; };
-    $("#phRetake").onclick = () => { URL.revokeObjectURL(url); back(); openCamera(); };
+    $("#phVis").onclick = e => { const b = e.target.closest("[data-vis]"); if (!b || b.disabled) return; vis = b.dataset.vis;
+      $$("#phVis [data-vis]").forEach(x => x.setAttribute("aria-checked", x === b)); $("#phWho").textContent = VIS[vis].d;
+      if (!req) store.set("photoVis", vis); };            // remembered: choose Family once and every photo goes to family
+    $("#phRetake").onclick = () => { URL.revokeObjectURL(url); back(); openCamera(req); };
     $("#phSave").onclick = async () => {
       $("#phSave").disabled = true;
       const rec = {id: "p" + ts + "_" + Math.random().toString(36).slice(2, 8), ts, lat: fix ? fix.lat : null, lng: fix ? fix.lng : null, acc: fix ? fix.acc : null,
-        near: shot.near, caption: $("#phCap").value.trim(), public: $("#phPub").classList.contains("on"), uploaded: false, serverId: null, blob: shot.blob, thumb: shot.thumb};
+        near: shot.near, caption: $("#phCap").value.trim(), vis, reqId: req && vis !== "me" ? req.id : null, uploaded: false, serverId: null, blob: shot.blob, thumb: shot.thumb};
       await photoPut(rec);
       const d = new Date(ts), p2 = n => String(n).padStart(2, "0");
       const name = `Narmada_${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}_${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}.jpg`;
       let inGallery = false;
       if (NATIVE && NATIVE.saveToGallery) inGallery = NATIVE.saveToGallery(await toDataURL(shot.blob), name);
       URL.revokeObjectURL(url);
-      toast(rec.public ? (online() ? "Saved ✓ Sharing on the map…" : "Saved ✓ It goes on the map when you're online") : `Saved ✓ ${inGallery ? "in your gallery – " : ""}only you can see it`);
+      toast(vis === "me" ? `Saved ✓ ${inGallery ? "in your gallery – " : ""}only you can see it`
+        : (online() ? `Saved ✓ Sending to ${vis === "family" ? "your family" : "the map"}…` : `Saved ✓ It is sent when you're online`));
+      if (req && vis === "me" && online()) api(`/photo-requests/${req.id}/decline`, {method: "POST"}).catch(() => {});
       back(); setSheet("min"); await loadLocalPhotos(); if (rec.lat != null) map.setView([rec.lat, rec.lng], Math.max(map.getZoom(), 15));
-      if (rec.public) sync();
+      if (vis !== "me") sync();
+      if (req) loadFamily().catch(() => {});
     };
   }
-  function openCamera() { const i = $("#camIn"); i.value = ""; fixForPhoto(); i.click(); }
+  let pendingReq = null;
+  function openCamera(req) { pendingReq = req || null; const i = $("#camIn"); i.value = ""; fixForPhoto(); i.click(); }
 
   async function uploadPhotos() {
     for (const rec of await photoAll()) {
-      if (!rec.public || rec.uploaded || rec.lat == null) continue;
-      const fd = form({lat: rec.lat, lng: rec.lng, acc: rec.acc, ts: rec.ts / 1000, caption: rec.caption, near: rec.near, client_id: rec.id});
+      const v = visOf(rec);
+      if (v === "me" || rec.lat == null || (rec.uploaded && rec.sentVis === v)) continue;
+      const fd = form({lat: rec.lat, lng: rec.lng, acc: rec.acc, ts: rec.ts / 1000, caption: rec.caption, near: rec.near, client_id: rec.id,
+                       visibility: v, request_id: rec.reqId || ""});
       fd.append("photo", rec.blob, rec.id + ".jpg");
       const r = await api("/photos", {method: "POST", body: fd, timeout: 120000});
       const j = await r.json().catch(() => ({}));
-      if (r.ok) { rec.uploaded = true; rec.serverId = j.photo.id; await photoPut(rec); toast("Photo shared on the map 🌍"); }
-      else if (r.status >= 400 && r.status < 500) { rec.public = false; await photoPut(rec); toast("Photo kept private: " + (j.error || r.status)); }
+      if (r.ok) { rec.uploaded = true; rec.sentVis = v; rec.serverId = j.photo.id; await photoPut(rec); toast(v === "family" ? "Photo sent to your family 👨‍👩‍👧" : "Photo shared on the map 🌍"); }
+      else if (r.status >= 400 && r.status < 500) { rec.vis = "me"; delete rec.public; await photoPut(rec); toast("Photo kept private: " + (j.error || r.status)); }
       else break;
     }
   }
@@ -747,9 +766,9 @@
   function allPhotos() {
     const mine = new Set(LOCAL_PHOTOS.map(r => r.id));
     const local = LOCAL_PHOTOS.filter(r => r.lat != null).map(r => ({local: r, id: r.id, lat: r.lat, lng: r.lng, ts: r.ts, thumb: blobURL(r.id + "t", r.thumb),
-      u: ME && ME.username, mine: true, priv: !r.public, near: r.near, caption: r.caption}));
+      u: ME && ME.username, mine: true, priv: visOf(r) === "me", fam: visOf(r) === "family", near: r.near, caption: r.caption}));
     const srv = SERVER_PHOTOS.filter(x => !(x.mine && mine.has(x.client_id))).map(x => ({srv: x, id: "s" + x.id, lat: x.lat, lng: x.lng, ts: x.ts * 1000,
-      thumb: absURL(x.thumb), u: x.u, mine: x.mine, near: x.near, caption: x.caption}));
+      thumb: absURL(x.thumb), u: x.u, mine: x.mine, fam: x.vis === "family", near: x.near, caption: x.caption}));
     return local.concat(srv);
   }
   function drawPhotos() {
@@ -758,7 +777,7 @@
     const b = map.getBounds().pad(0.2);
     allPhotos().filter(p => b.contains([p.lat, p.lng])).forEach(p => {
       L.marker([p.lat, p.lng], {icon: L.divIcon({className: "", iconSize: [46, 46], iconAnchor: [23, 46],
-        html: `<div class="phmark${p.priv ? " priv" : ""}"><img src="${esc(p.thumb)}" alt="" loading="lazy">${p.priv ? "<span>🔒</span>" : ""}</div>`}), zIndexOffset: 300})
+        html: `<div class="phmark${p.priv ? " priv" : ""}${p.fam ? " famph" : ""}"><img src="${esc(p.thumb)}" alt="" loading="lazy">${p.priv ? "<span>🔒</span>" : p.fam ? "<span>👨‍👩‍👧</span>" : ""}</div>`}), zIndexOffset: 300})
         .on("click", () => openViewer(p)).addTo(layers.photos);
     });
   }
@@ -768,26 +787,29 @@
     const r = p.local, s = p.srv, v = $("#pviewer");
     const src = r ? blobURL(r.id + "f", r.blob) : absURL(s.full);
     const when = new Date(p.ts).toLocaleString("en-IN", {day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit"});
-    const status = r ? (r.public ? (r.uploaded ? "🌍 Public" : "🌍 Public · waiting for internet") : "🔒 Only you (on this phone)") : "🌍 Public";
+    const cur = r ? visOf(r) : (s.vis || "public");
+    const status = `${VIS[cur].i} ${cur === "me" ? "Only you (on this phone)" : VIS[cur].t}${r && cur !== "me" && !(r.uploaded && r.sentVis === cur) ? " · waiting for internet" : ""}`;
     v.innerHTML = `<div class="pvtop"><button class="pvbtn" id="pvClose" aria-label="Close">✕</button><div><b>@${esc(p.u || "")}</b><small>${esc(when)}${p.near ? " · near " + esc(p.near) : ""}</small></div></div>
       <img class="pvimg" src="${esc(src)}" alt="Photo by @${esc(p.u || "")}">
       <div class="pvbar">${p.caption ? `<p>${esc(p.caption)}</p>` : ""}<small>${status}</small>
         <div class="pvact">
           ${p.lat != null ? `<button class="btn2 alt" id="pvMap">Show on map</button>` : ""}
-          ${r && !r.public && r.lat != null ? `<button class="btn2 alt" id="pvPub">Make public</button>` : ""}
-          ${r && r.public ? `<button class="btn2 alt" id="pvPriv">Make private</button>` : ""}
+          ${r && r.lat != null ? Object.keys(VIS).filter(k => k !== cur).map(k => `<button class="btn2 alt" data-setvis="${k}">${VIS[k].i} ${VIS[k].t}</button>`).join("") : ""}
           ${r || (s && s.can_delete) ? `<button class="btn2 alt danger" id="pvDel">Delete</button>` : ""}
         </div></div>`;
     v.hidden = false;
     const close = () => { v.hidden = true; v.innerHTML = ""; };
     $("#pvClose").onclick = close;
     if ($("#pvMap")) $("#pvMap").onclick = () => { close(); map.setView([p.lat, p.lng], 17); setSheet("min"); };
-    if ($("#pvPub")) $("#pvPub").onclick = async () => { r.public = true; await photoPut(r); close(); toast(online() ? "Sharing…" : "It will be shared when you're online"); await loadLocalPhotos(); sync(); };
-    if ($("#pvPriv")) $("#pvPriv").onclick = async () => {
-      if (r.uploaded && r.serverId) { if (!online()) return toast("Needs internet to remove it from the server.");
-        const x = await api(`/photos/${r.serverId}/delete`, {method: "POST"}); if (!x.ok && x.status !== 404) return toast("Could not remove it from the server."); }
-      SERVER_PHOTOS = SERVER_PHOTOS.filter(q => !(q.mine && q.client_id === r.id)); store.set("photosCache", SERVER_PHOTOS);
-      r.public = false; r.uploaded = false; r.serverId = null; await photoPut(r); close(); toast("Now private – only on this phone 🔒"); loadLocalPhotos(); };
+    $$("#pviewer [data-setvis]").forEach(b => b.onclick = async () => {
+      const k = b.dataset.setvis; delete r.public;
+      if (k === "me") {
+        if (r.uploaded && r.serverId) { if (!online()) return toast("Needs internet to remove it from the server.");
+          const x = await api(`/photos/${r.serverId}/delete`, {method: "POST"}); if (!x.ok && x.status !== 404) return toast("Could not remove it from the server."); }
+        SERVER_PHOTOS = SERVER_PHOTOS.filter(q => !(q.mine && q.client_id === r.id)); store.set("photosCache", SERVER_PHOTOS);
+        r.vis = "me"; r.uploaded = false; r.sentVis = null; r.serverId = null; await photoPut(r); close(); toast("Now private – only on this phone 🔒"); return loadLocalPhotos();
+      }
+      r.vis = k; await photoPut(r); close(); toast(online() ? `Sending to ${k === "family" ? "your family" : "the map"}…` : "It is sent when you're online"); await loadLocalPhotos(); sync(); });
     if ($("#pvDel")) $("#pvDel").onclick = async () => {
       const yes = $("#pvDel").dataset.sure; if (!yes) { $("#pvDel").dataset.sure = 1; $("#pvDel").textContent = "Tap again to delete"; return; }
       const sid = r ? (r.uploaded && r.serverId) : s.id;
@@ -805,6 +827,89 @@
       const r = LOCAL_PHOTOS.find(x => x.id === i.dataset.ph);
       openViewer(p || {local: r, id: r.id, ts: r.ts, u: ME && ME.username, mine: true, near: r.near, caption: r.caption, lat: r.lat, lng: r.lng}); });
   }
+
+  // ================================================================ family circle
+  // Family members see each other's exact location, path and Family photos, and can ask for a photo.
+  let FAMILY = store.get("family", {members: [], incoming: [], outgoing: [], photo_requests: []});
+  const famIcon = m => { const c = hue(m.u); return L.divIcon({className: "", iconSize: [34, 34], iconAnchor: [17, 17],
+    html: `<div class="pmark fam${m.online ? " live" : ""}" style="color:${c}"><span class="ring"></span><div class="dot" style="background:${c}">${esc(m.u[0].toUpperCase())}</div><span class="famtag">👨‍👩‍👧</span><span class="lbl">@${esc(m.u)}</span></div>`}); };
+  function famAgo(m) { if (m.sec == null) return "not seen yet"; if (m.sec < 90) return "here now"; if (m.sec < 3600) return Math.round(m.sec / 60) + " min ago"; return m.seen; }
+  function renderFamily() {
+    const f = FAMILY, mine = lastFix ? [lastFix.lat, lastFix.lng] : null;
+    layers.family.clearLayers();
+    f.members.forEach(m => { if (m.lat == null) return;
+      L.marker([m.lat, m.lng], {icon: famIcon(m), zIndexOffset: 800}).bindTooltip(`👨‍👩‍👧 @${esc(m.u)} · ${famAgo(m)}${m.acc ? " · ±" + Math.round(m.acc) + " m" : ""}`).addTo(layers.family); });
+    const asks = f.photo_requests.map(a => `<div class="askcard"><div>📷 <b>@${esc(a.u)}</b> asks for a photo <small>${esc(a.when)}</small></div>
+        <div class="actions"><button class="btn2" data-askyes="${a.id}" data-u="${esc(a.u)}">Take photo</button><button class="btn2 alt" data-askno="${a.id}">Not now</button></div></div>`).join("");
+    const mem = f.members.map(m => `<div class="famcard">
+        <div class="ou"><div class="av" style="background:${hue(m.u)}">${esc(m.u[0].toUpperCase())}</div>
+          <div><b>@${esc(m.u)}</b> <small>${esc(m.name || "")}</small><br><small>${m.online ? "🟢 " : ""}${famAgo(m)}${mine && m.lat != null ? " · " + km(mine, [m.lat, m.lng]).toFixed(1) + " km away" : ""}</small></div></div>
+        ${m.last_photo ? `<img class="famlast" src="${esc(absURL(m.last_photo.thumb))}" data-famph="${m.last_photo.id}" alt="Latest photo from @${esc(m.u)}">` : ""}
+        <div class="actions">${m.lat != null ? `<button class="btn2 alt" data-fmap="${esc(m.u)}">📍 Map &amp; path</button>` : ""}
+          <button class="btn2 alt" data-fask="${esc(m.u)}">📷 Ask for photo</button><button class="btn2 alt" data-fphotos="${esc(m.u)}">🖼 Photos</button></div>
+        <div class="famphotos" id="fp_${esc(m.u)}"></div></div>`).join("");
+    const inc = f.incoming.map(i => `<div class="askcard"><div>👨‍👩‍👧 <b>@${esc(i.u)}</b> wants to add you to their family</div>
+        <div class="actions"><button class="btn2" data-facc="${i.id}">Accept</button><button class="btn2 alt" data-frem="${i.id}">Decline</button></div></div>`).join("");
+    const out = f.outgoing.map(i => `<div class="ou"><div class="av nodot" style="background:#9aa0a6">${esc(i.u[0].toUpperCase())}</div><div><b>@${esc(i.u)}</b><br><small>Waiting for them to accept</small></div><button class="btn2 alt" data-frem="${i.id}">Cancel</button></div>`).join("");
+    $("#famBody").innerHTML = asks + inc + (mem || (inc || out ? "" : `<div class="empty">No family yet. Add a family member or friend by their username – they accept on their phone. Then you see each other's live location, path and Family photos.</div>`)) + out;
+    const n = f.photo_requests.length + f.incoming.length; $("#famCount").textContent = n || f.members.length; $("#famCount").classList.toggle("alert", n > 0);
+  }
+  async function loadFamily() {
+    if (!online() || !TOKEN) return renderFamily();
+    const prev = new Set((FAMILY.photo_requests || []).map(a => a.id));
+    FAMILY = await apiJSON("/family"); store.set("family", FAMILY); renderFamily(); nativeAuth();
+    const fresh = FAMILY.photo_requests.filter(a => !prev.has(a.id));
+    if (fresh.length) { toast(`📷 @${fresh[0].u} asks for a photo – see the Family tab`); if (navigator.vibrate) navigator.vibrate([120, 80, 120]); }
+  }
+  // new family photos while the app is open
+  async function checkNotify() {
+    const since = store.get("notifySince", Date.now() / 1000 - 60);
+    const j = await apiJSON(`/notify?since=${since}`); store.set("notifySince", j.now);
+    const ph = j.items.filter(i => i.kind === "photo"), dec = j.items.filter(i => i.kind === "declined");
+    if (ph.length) { toast(`${ph[ph.length - 1].title}${ph.length > 1 ? ` (+${ph.length - 1})` : ""}`); fetchAreaPhotos(); loadFamily().catch(() => {}); }
+    dec.forEach(d => toast(d.title));
+  }
+  async function showFamilyPhotos(u) {
+    const box = document.getElementById("fp_" + u); if (!box) return;
+    if (box.innerHTML) { box.innerHTML = ""; return; }
+    box.innerHTML = `<small>Loading…</small>`;
+    try {
+      const j = await apiJSON(`/photos?u=${encodeURIComponent(u)}&limit=60`);
+      const have = new Set(SERVER_PHOTOS.map(x => x.id)); SERVER_PHOTOS = SERVER_PHOTOS.concat(j.photos.filter(x => !have.has(x.id))).slice(-600); store.set("photosCache", SERVER_PHOTOS);
+      box.innerHTML = j.photos.length ? `<div class="phstrip">${j.photos.map(x => `<img src="${esc(absURL(x.thumb))}" data-famph="${x.id}" alt="${esc(x.when)}">`).join("")}</div>` : `<small>No photos yet.</small>`;
+    } catch (e) { box.innerHTML = `<small>Needs internet.</small>`; }
+  }
+  function openServerPhoto(id) {
+    const x = SERVER_PHOTOS.find(q => q.id === +id) || FAMILY.members.map(m => m.last_photo).find(q => q && q.id === +id);
+    if (x) openViewer({srv: x, id: "s" + x.id, lat: x.lat, lng: x.lng, ts: x.ts * 1000, u: x.u, mine: x.mine, near: x.near, caption: x.caption});
+  }
+  function wireFamily() {
+    $("#famAdd").onsubmit = async e => { e.preventDefault(); const u = $("#famUser").value.trim(); if (!u) return;
+      if (!online()) return toast("Needs internet.");
+      try { const r = await apiJSON("/family/add", {method: "POST", body: form({username: u})});
+        toast(r.status === "accepted" ? "Added to your family ✓" : "Request sent – they accept on their phone"); $("#famUser").value = ""; loadFamily(); } catch (err) { toast(err.message); } };
+    $("#famBody").addEventListener("click", async e => {
+      const t = e.target.closest("button,img"); if (!t) return; const d = t.dataset;
+      try {
+        if (d.askyes) return openCamera({id: +d.askyes, u: d.u});
+        if (d.askno) { await api(`/photo-requests/${d.askno}/decline`, {method: "POST"}); return loadFamily(); }
+        if (d.facc) { await apiJSON(`/family/${d.facc}/accept`, {method: "POST"}); toast("You're now family ✓"); return loadFamily(); }
+        if (d.frem) { if (!t.dataset.sure) { t.dataset.sure = 1; t.textContent = "Tap again"; return; } await apiJSON(`/family/${d.frem}/remove`, {method: "POST"}); return loadFamily(); }
+        if (d.fask) { const r = await apiJSON("/family/ask", {method: "POST", body: form({username: d.fask})});
+          return toast(r.again ? `Already asked @${d.fask} – waiting for the photo` : `Asked @${d.fask} for a photo 📷 You'll get a notification when it arrives.`); }
+        if (d.fphotos) return showFamilyPhotos(d.fphotos);
+        if (d.famph) return openServerPhoto(d.famph);
+        if (d.fmap) { const m = FAMILY.members.find(x => x.u === d.fmap); map.flyTo([m.lat, m.lng], 15);
+          const i = withPending(PATHS).findIndex(pp => pp.u === m.u); if (i >= 0) { SEL = i; renderPaths(); } setSheet("min"); }
+      } catch (err) { toast(err.message || "Needs internet."); }
+    });
+  }
+  // opened from a phone notification
+  window.appOpen = what => {
+    $$("[data-tab]").forEach(x => { if (x.dataset.tab === "family") x.click(); });
+    setSheet("half");
+    loadFamily().then(() => { if (String(what).startsWith("ask:")) { const a = FAMILY.photo_requests.find(r => r.id === +what.slice(4)); if (a) openCamera({id: a.id, u: a.u}); } }).catch(() => {});
+  };
 
   // ================================================================ yatra paths (shared GPS tracks)
   let PATHS = [];
@@ -862,7 +967,8 @@
       if (f === "near" && !filters.has("near") && !myPos) return withMyPos(() => { filters.add("near"); b.classList.add("on"); render(); map.flyTo(myPos, 10); });
       if (filters.has(f)) filters.delete(f); else filters.add(f); b.classList.toggle("on", filters.has(f)); render(); });
     $$("[data-tab]").forEach(b => b.onclick = () => { const t = b.dataset.tab; $$("[data-tab]").forEach(x => x.setAttribute("aria-selected", x === b));
-      $("#stopsTab").hidden = t !== "stops"; $("#onlineTab").hidden = t !== "online"; $("#pathsTab").hidden = t !== "paths";
+      $("#stopsTab").hidden = t !== "stops"; $("#onlineTab").hidden = t !== "online"; $("#pathsTab").hidden = t !== "paths"; $("#famTab").hidden = t !== "family";
+      if (t === "family") loadFamily().catch(() => renderFamily());
       if (t === "online" && online()) loadOnline().catch(() => {});
       if (t === "paths") { renderPaths(); if (online()) loadPaths().catch(() => {}); } });
     const showPath = i => { SEL = i; renderPaths(); const l = $("#pathList")._list; if (l[SEL]) { fitPath(l[SEL]); setSheet("min"); } };
@@ -914,8 +1020,9 @@
       map.on("dragstart", () => { if (phone() && (panel.dataset.size === "half" || panel.dataset.size === "full")) setSheet("min"); });
     })();
 
-    $("#camBtn").onclick = openCamera;
-    $("#camIn").onchange = () => { const f = $("#camIn").files[0]; if (f) takePhoto(f); };
+    $("#camBtn").onclick = () => openCamera();
+    wireFamily();
+    $("#camIn").onchange = () => { const f = $("#camIn").files[0]; if (f) takePhoto(f, pendingReq); pendingReq = null; };
     window.addEventListener("online", () => { updateNetbar(); sync(); });
     window.addEventListener("offline", updateNetbar);
   }
@@ -925,17 +1032,19 @@
     try {
       if (ME && ME.share_live && lastFix) await api("/presence", {method: "POST", body: form({lat: lastFix.lat, lng: lastFix.lng, accuracy: lastFix.acc})});
       await loadOnline();
+      await loadFamily(); await checkNotify();
     } catch (e) { /* try next time */ }
   }
   // hand the login to the phone's background service, so live location and journey upload
   // keep working while another app is open or the screen is off
-  const nativeAuth = () => { if (NATIVE && NATIVE.setAuth && TOKEN) NATIVE.setAuth(SERVER, TOKEN, !!(ME && ME.share_live)); };
+  const nativeAuth = () => { if (NATIVE && NATIVE.setAuth && TOKEN) NATIVE.setAuth(SERVER, TOKEN, !!(ME && ME.share_live), !!(typeof FAMILY !== "undefined" && FAMILY.members.length)); };
   let started = false;
   function startApp() {
     $("#auth").hidden = true; $("#appRoot").hidden = false;
     $("#avatarBtn").textContent = ((ME && ME.username) || "?")[0].toUpperCase();
     if (!started) {
-      started = true; initMap(); wireControls(); drawReports(); renderPaths(); loadLocalPhotos();
+      started = true; initMap(); wireControls(); drawReports(); renderPaths(); loadLocalPhotos(); renderFamily();
+      if (NATIVE && NATIVE.takeOpen) { const o = NATIVE.takeOpen(); if (o) setTimeout(() => window.appOpen(o), 1200); }
       if (placed.length) map.fitBounds(placed.map(o => [o.lat, o.lng]), {padding: [40, 40]});
       if (navigator.geolocation) navigator.geolocation.watchPosition(setMyPos, () => {}, {enableHighAccuracy: true, maximumAge: 30000});
       if (NATIVE && store.get("recording", true) && !NATIVE.isTracking()) store.set("recording", NATIVE.startTracking());

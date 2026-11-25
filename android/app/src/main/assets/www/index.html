@@ -68,7 +68,8 @@
       <div class="tabs2" role="tablist">
         <button data-tab="stops" aria-selected="true">Stops <span id="stopCount" class="cnt"></span></button>
         <button data-tab="online" aria-selected="false"><span class="live"></span>Online <span id="onlineCount" class="cnt">–</span></button>
-        <button data-tab="paths" aria-selected="false">🚶 Paths <span id="pathCount" class="cnt">0</span></button>
+        <button data-tab="paths" aria-selected="false">Paths <span id="pathCount" class="cnt">0</span></button>
+        <button data-tab="family" aria-selected="false">Family <span id="famCount" class="cnt">0</span></button>
       </div>
       <div id="stopsTab">
         <div class="chiprow">
@@ -94,6 +95,10 @@
         <p class="hintline">Yatra paths shared by pilgrims (GPS). Share yours: ☰ Menu → Share my yatra path. Works offline with the last synced paths.</p>
         <div id="pathNav"></div>
         <div class="list" id="pathList"></div>
+      </div>
+      <div id="famTab" hidden>
+        <form id="famAdd" class="famadd"><input id="famUser" placeholder="Add family by username, e.g. @ramdas" autocomplete="off" autocapitalize="none" aria-label="Username to add"><button class="btn2">Add</button></form>
+        <div id="famBody"></div>
       </div>
     </div>
     <div id="detailView" hidden></div>

@@ -35,6 +35,8 @@ class LocationService : Service(), LocationListener {
     private var lastLiveSent = 0L
     private var lastUpload = 0L
     private var liveMode = false
+    private var familyMode = false
+    private var lastNotify = 0L
     private val net = Executors.newSingleThreadExecutor()
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -46,6 +48,7 @@ class LocationService : Service(), LocationListener {
             return START_NOT_STICKY
         }
         liveMode = Net.live(this)
+        familyMode = Net.family(this)
         startInForeground()
         lm?.removeUpdates(this)
         startUpdates()
@@ -102,11 +105,13 @@ class LocationService : Service(), LocationListener {
     override fun onLocationChanged(loc: Location) {
         if (loc.accuracy > 250f) return                       // ignore very rough fixes
         val now = System.currentTimeMillis()
-        if (liveMode && now - lastLiveSent > 20_000L) {
+        // live sharing: every 20 s; family circle: every 2 minutes (family always sees your position)
+        if ((liveMode && now - lastLiveSent > 20_000L) || (familyMode && now - lastLiveSent > 120_000L)) {
             lastLiveSent = now
             val body = "lat=${loc.latitude}&lng=${loc.longitude}&accuracy=${loc.accuracy}"
             net.execute { Net.post(this, "/presence", body, "application/x-www-form-urlencoded") }
         }
+        if (now - lastNotify > 60_000L) { lastNotify = now; net.execute { Net.checkNotify(this) } }
         if (now - lastUpload > 5 * 60_000L) { lastUpload = now; net.execute { Net.uploadPoints(this) } }
         val prev = last
         // keep a point when we moved ~80 m, or every 10 minutes while standing still

@@ -126,8 +126,19 @@ class MainActivity : Activity() {
         }
 
         askPermissions()
+        pendingOpen = intent?.getStringExtra("open")
         web.loadUrl("https://appassets.androidplatform.net/assets/www/index.html")
     }
+
+    // ---------------------------------------------------------------- opened from a family notification
+    private var pendingOpen: String? = null
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        val o = intent.getStringExtra("open") ?: return
+        web.evaluateJavascript("window.appOpen && window.appOpen(${org.json.JSONObject.quote(o)})", null)
+    }
+    override fun onResume() { super.onResume(); inForeground = true }
+    override fun onPause() { inForeground = false; super.onPause() }
 
     // ---------------------------------------------------------------- offline map with Range support
     private fun serveMapRange(headers: Map<String, String>): WebResourceResponse {
@@ -216,11 +227,13 @@ class MainActivity : Activity() {
         @JavascriptInterface fun isTracking(): Boolean = LocationService.running
 
         /** Login details for the background service. live=true keeps sharing location when the app is not on screen. */
-        @JavascriptInterface fun setAuth(server: String, token: String, live: Boolean) {
-            val was = Net.live(this@MainActivity)
-            Net.save(this@MainActivity, server, token, live)
+        @JavascriptInterface fun takeOpen(): String { val o = pendingOpen ?: ""; pendingOpen = null; return o }
+
+        @JavascriptInterface fun setAuth(server: String, token: String, live: Boolean, family: Boolean) {
+            val was = Net.live(this@MainActivity); val wasFam = Net.family(this@MainActivity)
+            Net.save(this@MainActivity, server, token, live, family)
             if (live && !LocationService.running) startTracking()
-            else if (LocationService.running && was != live) {
+            else if (LocationService.running && (was != live || wasFam != family)) {
                 ContextCompat.startForegroundService(this@MainActivity,
                     Intent(this@MainActivity, LocationService::class.java).setAction(LocationService.ACTION_REFRESH))
             }
@@ -315,6 +328,7 @@ class MainActivity : Activity() {
     }
 
     companion object {
+        @Volatile var inForeground = false
         const val REQ_FILE = 11
         const val REQ_PERM = 12
     }

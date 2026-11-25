@@ -1,3 +1,4 @@
+[hidden]{display:none!important}   /* never show hidden screens, whatever their own display rule */
 :root{
   --ink:#16222a;--muted:#5e6c72;--line:rgba(20,40,50,.10);--glass:rgba(255,255,255,.86);--solid:#fff;
   --river:#0f6e77;--river-2:#e2f1f1;--saffron:#c8641e;--saffron-2:#fdeee2;--yes:#1d7a46;--yes-bg:#e3f4ea;

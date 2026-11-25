@@ -24,6 +24,14 @@ Endpoints
   POST /photos                 public geotagged photo: photo, lat, lng, acc, ts, caption, near, client_id
   GET  /photos                 ?bbox=s,w,n,e  public photos in an area · ?mine=1[&day=YYYY-MM-DD]
   POST /photos/<id>/delete     owner or admin
+  (photos: visibility=public|family, request_id=<id> when answering "Ask for a photo"; GET /photos?u=<username>)
+  GET  /family                 family circle: members (exact live position), invitations, photo requests to me
+  POST /family/add             username
+  POST /family/<id>/accept     accept an invitation
+  POST /family/<id>/remove     decline / cancel / leave
+  POST /family/ask             username – ask a family member for a photo
+  POST /photo-requests/<id>/decline
+  GET  /notify?since=<ts>      new requests, family photos, invitations (for phone notifications)
   POST /timeline/points        JSON {"points":[{lat,lng,acc,ts}, ...]} recorded offline
   GET  /timeline/days          my days
   GET  /timeline?day=YYYY-MM-DD|all
@@ -248,6 +256,36 @@ def create_blueprint(core):
     def photo_delete(photo_id):
         code, payload = core.delete_geo_photo(g.user, photo_id)
         return jsonify(payload), code
+
+    @bp.get("/family")
+    def family():
+        return jsonify(core.family_view(g.user))
+
+    @bp.post("/family/add")
+    def family_add():
+        code, payload = core.family_add(g.user, request.form.get("username"))
+        return jsonify(payload), code
+
+    @bp.post("/family/<int:fid>/<action>")
+    def family_respond(fid, action):
+        if action not in ("accept", "remove"):
+            return err("Unknown action.", 404)
+        code, payload = core.family_respond(g.user, fid, action)
+        return jsonify(payload), code
+
+    @bp.post("/family/ask")
+    def family_ask():
+        code, payload = core.ask_photo(g.user, request.form.get("username"))
+        return jsonify(payload), code
+
+    @bp.post("/photo-requests/<int:rid>/decline")
+    def photo_request_decline(rid):
+        code, payload = core.decline_photo_request(g.user, rid)
+        return jsonify(payload), code
+
+    @bp.get("/notify")
+    def notify():
+        return jsonify(core.notifications(g.user, core.parse_float(request.args.get("since"), 0, 1e11)))
 
     @bp.get("/paths")
     def paths():

@@ -20,7 +20,7 @@ html,body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent}
   font-size:12.5px;padding:5px 12px;border-radius:999px;box-shadow:var(--shadow);white-space:nowrap}
 .netbar.ok{background:#188038}
 .netbar[hidden]{display:none}
-#updateView,#menuView,#timelineView{overflow-y:auto}
+#updateView,#menuView,#timelineView,#photoView{overflow-y:auto}
 #updateView[hidden],#menuView[hidden],#timelineView[hidden]{display:none}
 .mrow{display:flex;align-items:center;gap:12px;padding:12px 4px;border-bottom:1px solid var(--line)}
 .mrow .mi{font-size:20px;width:28px;text-align:center}
@@ -70,3 +70,22 @@ html,body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent}
 .pvbar{padding:10px 14px 18px}.pvbar p{margin:0 0 4px}.pvbar small{color:#bbb}
 .pvact{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.btn2.danger{color:#d93025}
 .pviewer[hidden]{display:none}
+/* family */
+.seg{display:flex;gap:6px;margin:4px 0}
+.seg button{flex:1;padding:9px 4px;border-radius:10px;border:1.5px solid #d0d7d9;background:#fff;font:600 13px/1.2 inherit;color:#3c4043}
+.seg button[aria-checked=true]{border-color:#1a73e8;background:#e8f0fe;color:#1a56b8}
+.seg button:disabled{opacity:.4}
+.famadd{display:flex;gap:8px;margin:0 0 10px}.famadd input{flex:1;min-width:0;padding:10px 12px;border:1px solid #d0d7d9;border-radius:10px;font-size:15px}
+.famcard{border:1px solid #e3e7e8;border-radius:14px;padding:8px 10px;margin-bottom:10px}
+.famcard .ou{padding:2px 0}.famcard .actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.famcard .actions .btn2{padding:7px 10px;font-size:13px}
+.famlast{width:100%;max-height:160px;object-fit:cover;border-radius:10px;margin-top:6px;cursor:pointer}
+.askcard{background:#fef7e0;border-radius:14px;padding:10px 12px;margin-bottom:10px}.askcard .actions{display:flex;gap:8px;margin-top:8px}
+.cnt.alert{background:#d93025;color:#fff}
+.pmark.fam .dot{box-shadow:0 0 0 3px #fff,0 0 0 5px #188038}
+.pmark .famtag{position:absolute;top:-10px;right:-12px;font-size:13px}
+.phmark.famph{border-color:#a8dab5}
+/* four tabs on a narrow phone */
+.tabs2{gap:2px;padding:8px 6px 6px}
+.tabs2 button{padding:8px 2px;gap:3px;font-size:13px;white-space:nowrap;min-width:0}
+.tabs2 .cnt{font-size:11px;padding:1px 5px}

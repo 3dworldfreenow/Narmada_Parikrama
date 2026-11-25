@@ -181,6 +181,25 @@ CREATE TABLE IF NOT EXISTS geo_photos (           -- geotagged camera photos the
 CREATE UNIQUE INDEX IF NOT EXISTS idx_geo_client ON geo_photos(user_id, client_id);
 CREATE INDEX IF NOT EXISTS idx_geo_pos ON geo_photos(lat, lng);
 
+CREATE TABLE IF NOT EXISTS family (               -- family circle: a asked b; mutual once accepted
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    a_id INTEGER NOT NULL REFERENCES users(id),
+    b_id INTEGER NOT NULL REFERENCES users(id),
+    status TEXT NOT NULL DEFAULT 'pending',      -- pending / accepted
+    created_ts REAL NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_family_pair ON family(a_id, b_id);
+
+CREATE TABLE IF NOT EXISTS photo_requests (       -- "Ask for a photo"
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    from_id INTEGER NOT NULL REFERENCES users(id),
+    to_id INTEGER NOT NULL REFERENCES users(id),
+    created_ts REAL NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',      -- pending / done / declined
+    photo_id INTEGER,
+    done_ts REAL
+);
+
 CREATE TABLE IF NOT EXISTS location_points (      -- each user's private journey ("timeline")
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL REFERENCES users(id),
@@ -237,7 +256,9 @@ def init_db():
                             ("users", "show_on_map", "INTEGER DEFAULT 1"),
                             ("users", "save_timeline", "INTEGER DEFAULT 1"),
                             ("users", "share_path", "INTEGER DEFAULT 0"),
-                            ("users", "share_live", "INTEGER DEFAULT 0")]:
+                            ("users", "share_live", "INTEGER DEFAULT 0"),
+                            ("geo_photos", "visibility", "TEXT DEFAULT 'public'"),
+                            ("geo_photos", "created_ts", "REAL")]:
         cols = [r[1] for r in db.execute(f"PRAGMA table_info({table})")]
         if col not in cols:
             db.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typ}")
@@ -962,7 +983,8 @@ def geo_photo_json(r, me_id=None, is_admin=False):
             "caption": r["caption"] or "", "near": r["near"] or "", "client_id": r["client_id"],
             "thumb": url_for("geo_photo_file", name=r["file_key"] + "_t.jpg"),
             "full": url_for("geo_photo_file", name=r["file_key"] + "_f.jpg"),
-            "mine": r["user_id"] == me_id, "can_delete": r["user_id"] == me_id or is_admin}
+            "mine": r["user_id"] == me_id, "can_delete": r["user_id"] == me_id or is_admin,
+            "vis": r["visibility"] or "public"}
 
 
 def save_geo_photo(user, form, fs):
@@ -978,11 +1000,18 @@ def save_geo_photo(user, form, fs):
     if not looks_like_image(head):
         return 400, {"error": "That file is not a photo."}
     cid = (form.get("client_id") or "")[:64] or None
+    vis = "family" if form.get("visibility") == "family" else "public"
     db = get_db()
+    req = None
+    if form.get("request_id"):                       # answering "Ask for a photo"
+        req = db.execute("SELECT * FROM photo_requests WHERE id=? AND to_id=?", (form.get("request_id"), user["id"])).fetchone()
     if cid:
         old = db.execute("SELECT g.*, u.username FROM geo_photos g JOIN users u ON u.id=g.user_id WHERE g.user_id=? AND g.client_id=?",
                          (user["id"], cid)).fetchone()
         if old:
+            if old["visibility"] != vis:            # owner changed who can see it
+                db.execute("UPDATE geo_photos SET visibility=? WHERE id=?", (vis, old["id"])); db.commit()
+                old = db.execute("SELECT g.*, u.username FROM geo_photos g JOIN users u ON u.id=g.user_id WHERE g.id=?", (old["id"],)).fetchone()
             return 200, {"ok": True, "photo": geo_photo_json(old, user["id"]), "duplicate": True}
     from PIL import Image, ImageOps
     try:
@@ -995,18 +1024,25 @@ def save_geo_photo(user, form, fs):
     w, h = img.size; s = min(w, h)
     th = img.crop(((w - s) // 2, (h - s) // 2, (w - s) // 2 + s, (h - s) // 2 + s)); th.thumbnail((240, 240))
     th.save(os.path.join(GEO_DIR, key + "_t.jpg"), "JPEG", quality=80)
-    cur = db.execute("""INSERT INTO geo_photos (user_id, client_id, file_key, lat, lng, acc, taken_ts, caption, near, created_at)
-                        VALUES (?,?,?,?,?,?,?,?,?,?)""",
+    cur = db.execute("""INSERT INTO geo_photos (user_id, client_id, file_key, lat, lng, acc, taken_ts, caption, near, created_at,
+                                                visibility, created_ts) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
                      (user["id"], cid, key, lat, lng, parse_float(form.get("acc"), 0, 1e6), ts,
-                      (form.get("caption") or "").strip()[:300], (form.get("near") or "").strip()[:120], now()))
+                      (form.get("caption") or "").strip()[:300], (form.get("near") or "").strip()[:120], now(), vis, nowts))
+    if req is not None and req["status"] == "pending":
+        db.execute("UPDATE photo_requests SET status='done', photo_id=?, done_ts=? WHERE id=?", (cur.lastrowid, nowts, req["id"]))
     db.commit()
     r = db.execute("SELECT g.*, u.username FROM geo_photos g JOIN users u ON u.id=g.user_id WHERE g.id=?", (cur.lastrowid,)).fetchone()
     return 200, {"ok": True, "photo": geo_photo_json(r, user["id"])}
 
 
 def list_geo_photos(user, args):
-    """Public photos in a map area (?bbox=south,west,north,east), or mine (?mine=1, optional &day=YYYY-MM-DD)."""
-    where, vals = [], []
+    """Photos in a map area (?bbox=south,west,north,east), mine (?mine=1, optional &day=YYYY-MM-DD),
+    or one family member's (?u=username). Family-only photos are shown to the owner and their family."""
+    fam = family_ids(user["id"])
+    where = [f"(g.visibility='public' OR g.user_id=? OR (g.visibility='family' AND g.user_id IN ({','.join('?' * len(fam)) or 'NULL'})))"]
+    vals = [user["id"], *fam]
+    if args.get("u"):
+        where.append("u.username=?"); vals.append(args["u"])
     if args.get("mine"):
         where.append("g.user_id=?"); vals.append(user["id"])
         if args.get("day"):
@@ -1058,18 +1094,146 @@ def api_photo_delete(photo_id):
     return payload, code
 
 
+# ---------------------------------------------------------------- family circle
+def family_ids(uid):
+    """Accepted family members of a user (both directions)."""
+    rows = get_db().execute("""SELECT CASE WHEN a_id=? THEN b_id ELSE a_id END AS m FROM family
+                               WHERE status='accepted' AND (a_id=? OR b_id=?)""", (uid, uid, uid)).fetchall()
+    return {r["m"] for r in rows}
+
+
+def family_view(user):
+    """Everything the Family tab shows: members with their exact live position, invitations, photo requests."""
+    db, uid = get_db(), user["id"]
+    nowts = datetime.now(timezone.utc).timestamp()
+    rows = db.execute("""SELECT f.*, u.id AS mid, u.username, u.name, u.last_lat, u.last_lng, u.last_acc, u.last_seen_ts
+                         FROM family f JOIN users u ON u.id = CASE WHEN f.a_id=? THEN f.b_id ELSE f.a_id END
+                         WHERE f.a_id=? OR f.b_id=? ORDER BY u.username""", (uid, uid, uid)).fetchall()
+    members, incoming, outgoing = [], [], []
+    for r in rows:
+        base = {"id": r["id"], "u": r["username"], "name": r["name"]}
+        if r["status"] != "accepted":
+            (outgoing if r["a_id"] == uid else incoming).append(base)
+            continue
+        sec = int(nowts - r["last_seen_ts"]) if r["last_seen_ts"] else None
+        last_photo = db.execute("""SELECT g.*, u.username FROM geo_photos g JOIN users u ON u.id=g.user_id
+                                   WHERE g.user_id=? AND g.visibility IN ('public','family') ORDER BY g.taken_ts DESC LIMIT 1""",
+                                (r["mid"],)).fetchone()
+        members.append({**base, "lat": r["last_lat"], "lng": r["last_lng"], "acc": r["last_acc"], "sec": sec,
+                        "online": sec is not None and sec < ONLINE_MINUTES * 60,
+                        "seen": datetime.fromtimestamp(r["last_seen_ts"], IST).strftime("%d %b, %I:%M %p") if r["last_seen_ts"] else None,
+                        "last_photo": geo_photo_json(last_photo, uid) if last_photo else None})
+    asks = db.execute("""SELECT p.*, u.username FROM photo_requests p JOIN users u ON u.id=p.from_id
+                         WHERE p.to_id=? AND p.status='pending' AND p.created_ts>? ORDER BY p.created_ts""",
+                      (uid, nowts - 86400)).fetchall()
+    return {"members": members, "incoming": incoming, "outgoing": outgoing,
+            "photo_requests": [{"id": a["id"], "u": a["username"], "ts": a["created_ts"],
+                                "when": datetime.fromtimestamp(a["created_ts"], IST).strftime("%I:%M %p")} for a in asks]}
+
+
+def family_add(user, username):
+    db = get_db()
+    other = db.execute("SELECT * FROM users WHERE username=? COLLATE NOCASE", ((username or "").strip().lstrip("@"),)).fetchone()
+    if not other:
+        return 404, {"error": "No pilgrim with that username."}
+    if other["id"] == user["id"]:
+        return 400, {"error": "That's you. (Log in with the same account on your other phone instead.)"}
+    rev = db.execute("SELECT * FROM family WHERE a_id=? AND b_id=?", (other["id"], user["id"])).fetchone()
+    if rev:                                          # they already asked me: adding them back accepts
+        db.execute("UPDATE family SET status='accepted' WHERE id=?", (rev["id"],)); db.commit()
+        return 200, {"ok": True, "status": "accepted"}
+    if db.execute("SELECT 1 FROM family WHERE a_id=? AND b_id=?", (user["id"], other["id"])).fetchone():
+        return 200, {"ok": True, "status": "pending"}
+    db.execute("INSERT INTO family (a_id, b_id, status, created_ts) VALUES (?,?, 'pending', ?)",
+               (user["id"], other["id"], datetime.now(timezone.utc).timestamp()))
+    db.commit()
+    return 200, {"ok": True, "status": "pending"}
+
+
+def family_respond(user, fid, action):
+    """action: accept (invitation to me) or remove (any link I'm part of: decline, cancel, leave)."""
+    db = get_db()
+    r = db.execute("SELECT * FROM family WHERE id=? AND (a_id=? OR b_id=?)", (fid, user["id"], user["id"])).fetchone()
+    if not r:
+        return 404, {"error": "Not found."}
+    if action == "accept":
+        if r["b_id"] != user["id"]:
+            return 403, {"error": "Only the invited person can accept."}
+        db.execute("UPDATE family SET status='accepted' WHERE id=?", (fid,))
+    else:
+        db.execute("DELETE FROM family WHERE id=?", (fid,))
+    db.commit()
+    return 200, {"ok": True}
+
+
+def ask_photo(user, username):
+    db = get_db()
+    other = db.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone()
+    if not other or other["id"] not in family_ids(user["id"]):
+        return 403, {"error": "You can ask only people in your family circle."}
+    nowts = datetime.now(timezone.utc).timestamp()
+    old = db.execute("""SELECT id FROM photo_requests WHERE from_id=? AND to_id=? AND status='pending' AND created_ts>?""",
+                     (user["id"], other["id"], nowts - 1800)).fetchone()
+    if old:
+        return 200, {"ok": True, "id": old["id"], "again": True}
+    cur = db.execute("INSERT INTO photo_requests (from_id, to_id, created_ts) VALUES (?,?,?)", (user["id"], other["id"], nowts))
+    db.commit()
+    return 200, {"ok": True, "id": cur.lastrowid}
+
+
+def decline_photo_request(user, rid):
+    db = get_db()
+    db.execute("UPDATE photo_requests SET status='declined', done_ts=? WHERE id=? AND to_id=? AND status='pending'",
+               (datetime.now(timezone.utc).timestamp(), rid, user["id"]))
+    db.commit()
+    return 200, {"ok": True}
+
+
+def notifications(user, since):
+    """New things for the phone to show as notifications (polled every minute or so)."""
+    db, uid = get_db(), user["id"]
+    nowts = datetime.now(timezone.utc).timestamp()
+    since = max(since or 0, nowts - 86400)
+    fam = family_ids(uid)
+    out = []
+    for r in db.execute("""SELECT p.id, p.created_ts, u.username FROM photo_requests p JOIN users u ON u.id=p.from_id
+                           WHERE p.to_id=? AND p.status='pending' AND p.created_ts>?""", (uid, since)):
+        out.append({"kind": "ask", "id": r["id"], "u": r["username"], "ts": r["created_ts"],
+                    "title": f"📷 @{r['username']} asks for a photo", "text": "Tap to take one – it goes to your family."})
+    if fam:
+        q = ",".join("?" * len(fam))
+        for r in db.execute(f"""SELECT g.id, g.created_ts, g.near, g.caption, u.username FROM geo_photos g JOIN users u ON u.id=g.user_id
+                                WHERE g.user_id IN ({q}) AND g.visibility IN ('public','family') AND g.created_ts>?
+                                ORDER BY g.created_ts""", (*fam, since)):
+            out.append({"kind": "photo", "id": r["id"], "u": r["username"], "ts": r["created_ts"],
+                        "title": f"🖼 New photo from @{r['username']}",
+                        "text": (r["caption"] or "") + (f" · near {r['near']}" if r["near"] else "")})
+    for r in db.execute("""SELECT f.id, f.created_ts, u.username FROM family f JOIN users u ON u.id=f.a_id
+                           WHERE f.b_id=? AND f.status='pending' AND f.created_ts>?""", (uid, since)):
+        out.append({"kind": "invite", "id": r["id"], "u": r["username"], "ts": r["created_ts"],
+                    "title": f"👨‍👩‍👧 @{r['username']} wants to add you to their family", "text": "Open the app to accept."})
+    for r in db.execute("""SELECT p.id, p.done_ts, u.username FROM photo_requests p JOIN users u ON u.id=p.to_id
+                           WHERE p.from_id=? AND p.status='declined' AND p.done_ts>?""", (uid, since)):
+        out.append({"kind": "declined", "id": r["id"], "u": r["username"], "ts": r["done_ts"],
+                    "title": f"@{r['username']} can't send a photo right now", "text": ""})
+    out.sort(key=lambda n: n["ts"])
+    return {"now": nowts, "items": out}
+
+
 def public_paths(me_id):
     """Yatra paths of pilgrims who chose to share them (plus my own, which only I see unless shared).
     Thinned to ~150 m steps and split where the GPS jumped, so lines don't cut across the map."""
     db = get_db()
-    users = db.execute("""SELECT id, username, share_path FROM users
-                          WHERE username IS NOT NULL AND (share_path=1 OR id=?)""", (me_id,)).fetchall()
+    fam = family_ids(me_id)
+    users = db.execute(f"""SELECT id, username, share_path FROM users
+                          WHERE username IS NOT NULL AND (share_path=1 OR id=? OR id IN ({','.join('?' * len(fam)) or 'NULL'}))""",
+                       (me_id, *fam)).fetchall()
     cutoff = datetime.now(timezone.utc).timestamp() - PATH_HIDE_MIN * 60
     out = []
     for u in users:
         mine = u["id"] == me_id
         rows = db.execute("SELECT lat, lng, ts FROM location_points WHERE user_id=? AND ts<=? ORDER BY ts",
-                          (u["id"], datetime.now(timezone.utc).timestamp() if mine else cutoff)).fetchall()
+                          (u["id"], datetime.now(timezone.utc).timestamp() if mine or u["id"] in fam else cutoff)).fetchall()
         if not rows:
             continue
         segs, seg, km, prev, days = [], [], 0.0, None, set()
@@ -1089,7 +1253,7 @@ def public_paths(me_id):
         if len(seg) > 1: segs.append(seg)
         if not segs:
             continue
-        out.append({"u": u["username"], "me": mine, "shared": bool(u["share_path"]),
+        out.append({"u": u["username"], "me": mine, "shared": bool(u["share_path"]), "fam": u["id"] in fam,
                     "km": round(km, 1), "days": len(days),
                     "from": datetime.fromtimestamp(rows[0]["ts"], IST).strftime("%d %b %Y"),
                     "to": datetime.fromtimestamp(rows[-1]["ts"], IST).strftime("%d %b %Y"),
