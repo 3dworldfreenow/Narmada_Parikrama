@@ -95,7 +95,7 @@
     const marks = [];
     for (let i = 0; i < coords.length; i++) {
       const d = cum[i];
-      if (d < 2 || total - d < 2 || d - lastSampleKm < 0.4) continue;
+      if (d < 5 || total - d < 5 || d - lastSampleKm < 0.4) continue;   // ghats at either end are on the water
       const step = lastSampleKm < 0 ? 0.4 : d - lastSampleKm;
       lastSampleKm = d;
       const want = allowed(i, d), here = R.side(coords[i]);
@@ -106,7 +106,33 @@
     if (inRun && marks.length < 8) marks.push(runStart);
     return {offKm: off, marks};
   };
-  const legalOn = (r, bank) => R.offBank(r.coords, () => bank).offKm < 1.0;
+  const legalOn = (r, bank) => R.offBank(r.coords, () => bank).offKm < 2.0;
+
+  /**
+   * The parikrama path along one bank: the guide's stops in order from the stop nearest
+   * `a` to the stop nearest `b` (or to the chain's end with toEnd = "first" | "last").
+   * Roads along the bank are often missing from the map, but the stops are where pilgrims walk.
+   */
+  function nearestIdx(chain, p) {
+    return chain.reduce((bi, o, i) => kmBetween(p, [o.lat, o.lng]) < kmBetween(p, [chain[bi].lat, chain[bi].lng]) ? i : bi, 0);
+  }
+  R.bankPath = function (chain, a, b, toEnd) {
+    if (!chain || !chain.length) return null;
+    const i = nearestIdx(chain, a);
+    const j = toEnd === "first" ? 0 : toEnd === "last" ? chain.length - 1 : nearestIdx(chain, b);
+    const step = i <= j ? 1 : -1, stops = [];
+    for (let k = i; step > 0 ? k <= j : k >= j; k += step) stops.push(chain[k]);
+    const coords = [a].concat(stops.map(o => [o.lat, o.lng]));
+    if (!toEnd) coords.push(b);
+    // distance: the guide's own km between consecutive stops of the same stage, else ~20% over straight
+    let kmSum = kmBetween(a, [stops[0].lat, stops[0].lng]) * 1.2;
+    for (let k = 1; k < stops.length; k++) {
+      const p = stops[k - 1], q = stops[k], cp = parseFloat(p.cum), cq = parseFloat(q.cum);
+      kmSum += p.st === q.st && !isNaN(cp) && !isNaN(cq) ? Math.abs(cq - cp) : kmBetween([p.lat, p.lng], [q.lat, q.lng]) * 1.2;
+    }
+    if (!toEnd) kmSum += kmBetween([stops[stops.length - 1].lat, stops[stops.length - 1].lng], b) * 1.2;
+    return {coords, stops, km: kmSum};
+  };
 
   /** Parikrama stops on each bank, ordered from the sea (west) to the source (east). */
   R.bankChains = function (stops) {
@@ -173,7 +199,8 @@
         if (legalOn(kept[0], bank)) return {status: "kept", routes: kept, crossings: [], sideA, sideB, bank, via: via.length};
       } catch (e) { break; }
     }
-    return {status: "crosses", routes, crossings: R.offBank(routes[0].coords, () => bank).marks, sideA, sideB, bank};
+    return {status: "crosses", routes, crossings: R.offBank(routes[0].coords, () => bank).marks, sideA, sideB, bank,
+            bankPath: R.bankPath(chain, a, b)};
   };
 
   /** Way round to the other bank: which = "source" (via Amarkantak) or "sea" (boat at the mouth). */
@@ -190,7 +217,9 @@
       let turn = 0, best = 1e9;
       r[0].coords.forEach((c, i) => { const d = kmBetween(c, src); if (d < best) { best = d; turn = i; } });
       const chk = R.offBank(r[0].coords, i => (i <= turn ? sideA : sideB));
-      return {status: "around", which, routes: r, boat: null, crossings: chk.offKm >= 1 ? chk.marks : [], sideA, sideB};
+      const p1 = R.bankPath(A, a, null, "last"), p2 = R.bankPath(B, b, null, "last");
+      const bankPath = p1 && p2 ? {coords: p1.coords.concat(p2.coords.slice().reverse()), stops: p1.stops.concat(p2.stops.slice().reverse()), km: p1.km + p2.km} : null;
+      return {status: "around", which, routes: r, boat: null, crossings: chk.offKm >= 2 ? chk.marks : [], sideA, sideB, bankPath};
     }
     // sea: road to this bank's coast, boat across the gulf, road on from the other coast
     const coastA = [A[0].lat, A[0].lng], coastB = [B[0].lat, B[0].lng];
@@ -199,9 +228,11 @@
     const joined = {coords: leg1.coords.concat(leg2.coords), distance: leg1.distance + leg2.distance,
       duration: leg1.duration + leg2.duration, steps: leg1.steps.concat(leg2.steps), legs: [leg1, leg2]};
     const c1 = R.offBank(leg1.coords, () => sideA), c2 = R.offBank(leg2.coords, () => sideB);
-    const marks = (c1.offKm >= 1 ? c1.marks : []).concat(c2.offKm >= 1 ? c2.marks : []);
+    const marks = (c1.offKm >= 2 ? c1.marks : []).concat(c2.offKm >= 2 ? c2.marks : []);
+    const q1 = R.bankPath(A, a, null, "first"), q2 = R.bankPath(B, b, null, "first");
+    const bankPath = q1 && q2 ? {coords: q1.coords, coords2: q2.coords.slice().reverse(), stops: q1.stops.concat(q2.stops.slice().reverse()), km: q1.km + q2.km} : null;
     return {status: "around", which, routes: [joined], boat: [coastA, coastB], boatKm: kmBetween(coastA, coastB),
-      coastA: A[0].v, coastB: B[0].v, crossings: marks, sideA, sideB};
+      coastA: A[0].v, coastB: B[0].v, crossings: marks, sideA, sideB, bankPath};
   };
 
   R.kmBetween = kmBetween;

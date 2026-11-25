@@ -303,15 +303,29 @@
   const RR = window.RiverRule && window.RIVER && window.RiverRule.init(window.RIVER) ? window.RiverRule : null;
   const BANK = {north: "north (uttar) bank", south: "south (dakshin) bank"};
   const X_ICON = L.divIcon({className: "", iconSize: [26, 26], iconAnchor: [13, 13], html: '<div class="xmark">✕</div>'});
-  function drawRoutes(routes, a, b, crossings, boat) {
+  function drawBankPath(bp) {
+    if (!bp) return [];
+    const parts = [bp.coords].concat(bp.coords2 ? [bp.coords2] : []);
+    parts.forEach(c => L.polyline(c, {color: "#188038", weight: 5, opacity: .85, dashArray: "10 8"}).addTo(layers.road));
+    bp.stops.forEach(o => L.circleMarker([o.lat, o.lng], {radius: 4, color: "#fff", weight: 1.5, fillColor: "#188038", fillOpacity: 1}).bindTooltip(esc(o.v)).addTo(layers.road));
+    return parts.flat();
+  }
+  function bankHtml(bp, bankName) {
+    if (!bp) return "";
+    const names = bp.stops.map(o => esc(o.v || "stop"));
+    return `<div class="bankpath"><b>🚶 Parikrama path${bankName ? " along the " + bankName : ""}</b> (green dashed) – about <b>${Math.round(bp.km)} km</b>, ${bp.stops.length} stops:
+      <div class="stopchain">${names.slice(0, 40).join(" → ")}${names.length > 40 ? " → …" : ""}</div></div>`;
+  }
+  function drawRoutes(routes, a, b, crossings, boat, bankPath, greyRoad) {
     layers.road.clearLayers(); layers.pin.clearLayers();
     routes.slice(1).forEach(alt => L.polyline(alt.coords, {color: "#7f9cc9", weight: 5, opacity: .6}).addTo(layers.road));
     const best = routes[0], parts = best.legs ? best.legs.map(l => l.coords) : [best.coords];
-    parts.forEach(c => L.polyline(c, {color: "#1a73e8", weight: 6}).addTo(layers.road));
+    parts.forEach(c => L.polyline(c, greyRoad ? {color: "#8a9599", weight: 5, opacity: .7} : {color: "#1a73e8", weight: 6}).addTo(layers.road));
+    const bankPts = drawBankPath(bankPath);
     if (boat) L.polyline(boat, {color: "#0f6e77", weight: 4, dashArray: "2 10"}).addTo(layers.road);
     (crossings || []).forEach(x => L.marker(x, {icon: X_ICON}).addTo(layers.road));
     L.marker(b, {icon: L.divIcon({className: "", iconSize: [28, 40], iconAnchor: [14, 38], html: PIN})}).addTo(layers.road);
-    map.fitBounds(parts.flat().concat(boat || []), {padding: [60, 60]});
+    map.fitBounds(parts.flat().concat(boat || [], bankPts), {padding: [60, 60]});
     return best;
   }
   function routeHtml(best, a, b, note) {
@@ -357,7 +371,7 @@
             const r = await RR.planAround({a, b, router: ROUTERS[dir.mode], stops: DATA, which: btn.dataset.around});
             const note = r.which === "source" ? `<div class="note ok">✓ Round the source at Amarkantak.</div>`
               : `<div class="note ok">✓ Road to ${esc(r.coastA)}, <b>boat across the Gulf (~${Math.round(r.boatKm)} km, not in the time)</b> to ${esc(r.coastB)}, then road. Ask locally for boat timings.</div>`;
-            box.innerHTML = routeHtml(drawRoutes(r.routes, a, b, r.crossings, r.boat), a, b, note);
+            box.innerHTML = routeHtml(drawRoutes(r.routes, a, b, r.crossings, r.boat, r.bankPath, r.crossings.length > 0), a, b, note + bankHtml(r.bankPath));
           } catch (e) { box.innerHTML = `<div class="empty">Couldn't plan that right now.</div>`; }
         });
         return;
@@ -365,9 +379,10 @@
       const notes = {
         ok: BANK[plan.sideA] && plan.sideA === plan.sideB ? `<div class="note ok">✓ Stays on the ${BANK[plan.sideA]}.</div>` : `<div class="note ok">✓ Does not cross the Narmada.</div>`,
         kept: `<div class="note ok">✓ Kept on the ${BANK[plan.bank]} through ${plan.via} parikrama stops.</div>`,
-        crosses: `<div class="note warn">⚠ Every road found crosses the Narmada (✕). Follow the parikrama path and ask locally.</div>`,
+        crosses: bankHtml(plan.bankPath, BANK[plan.bank]) + `<div class="note warn">⚠ The map has no road that stays on this bank, so the road route (grey) crosses the Narmada at ✕. Walk the parikrama path instead – bank footpaths are often missing from the map; ask locally.</div>`,
         free: plan.crossings.length ? `<div class="note">Crosses the Narmada ${plan.crossings.length} time(s).</div>` : ""};
-      out.innerHTML = routeHtml(drawRoutes(plan.routes, a, b, ["crosses", "free"].includes(plan.status) ? plan.crossings : []), a, b, notes[plan.status]);
+      const crossing = plan.status === "crosses";
+      out.innerHTML = routeHtml(drawRoutes(plan.routes, a, b, crossing || plan.status === "free" ? plan.crossings : [], null, crossing ? plan.bankPath : null, crossing), a, b, notes[plan.status]);
     } catch (e) { out.innerHTML = `<div class="empty">No ${MODE[dir.mode]} route found. Try another mode.</div>`; }
   }
   $("#dirOpen").onclick = e => { e.preventDefault(); e.stopPropagation(); openDirections(null, null); };
