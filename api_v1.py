@@ -10,7 +10,7 @@ Endpoints
   POST /auth/login             login (username or email), password      -> {token, user}
   POST /auth/logout            revoke this token
   GET  /me                                                               -> user
-  POST /me/settings            show_on_map=0|1, save_timeline=0|1
+  POST /me/settings            show_on_map=0|1, save_timeline=0|1, share_path=0|1, share_live=0|1
   GET  /stops                  all stops (send If-None-Match for 304)  -> {version, stops}
   GET  /stops/<id>             one stop + approved history + media list
   POST /stops/<id>/updates     multipart: changed fields, note, lat, lng, accuracy,
@@ -20,6 +20,7 @@ Endpoints
   POST /reports                lat, lng, kind, note, mode, my_lat, my_lng, my_acc
   POST /presence               lat, lng, accuracy (optional) – "I'm online"
   GET  /online                 online pilgrims (rounded positions)
+  GET  /paths                  yatra paths of pilgrims who share them (+ my own)
   POST /timeline/points        JSON {"points":[{lat,lng,acc,ts}, ...]} recorded offline
   GET  /timeline/days          my days
   GET  /timeline?day=YYYY-MM-DD|all
@@ -49,7 +50,8 @@ def create_blueprint(core):
 
     def user_json(u):
         return {"id": u["id"], "username": u["username"], "name": u["name"], "role": u["role"],
-                "show_on_map": u["show_on_map"] != 0, "save_timeline": u["save_timeline"] != 0}
+                "show_on_map": u["show_on_map"] != 0, "save_timeline": u["save_timeline"] != 0,
+                "share_path": (u["share_path"] or 0) != 0, "share_live": (u["share_live"] or 0) != 0}
 
     def issue_token(user_id):
         token = secrets.token_urlsafe(32)
@@ -136,7 +138,7 @@ def create_blueprint(core):
     def me_settings():
         f = request.form
         sets, vals = [], []
-        for k in ("show_on_map", "save_timeline"):
+        for k in ("show_on_map", "save_timeline", "share_path", "share_live"):
             if k in f:
                 sets.append(f"{k}=?"); vals.append(1 if f.get(k) in ("1", "true", "on") else 0)
         if sets:
@@ -229,6 +231,10 @@ def create_blueprint(core):
     @bp.get("/online")
     def online():
         return core.api_online()
+
+    @bp.get("/paths")
+    def paths():
+        return jsonify(core.public_paths(g.user["id"]))
 
     @bp.post("/timeline/points")
     def timeline_points():

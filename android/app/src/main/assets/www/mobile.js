@@ -114,7 +114,7 @@
       L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 19, attribution: ATTR}).addTo(map);
       if (!online()) setTimeout(() => toast("No offline map yet – open ☰ Menu → Offline map when you have Wi-Fi."), 1500);
     }
-    ["route", "stops", "reports", "people", "road", "pin", "track"].forEach(k => layers[k] = L.layerGroup().addTo(map));
+    ["route", "paths", "stops", "reports", "people", "road", "pin", "track"].forEach(k => layers[k] = L.layerGroup().addTo(map));
     map.on("click", e => {
       const {lat, lng} = e.latlng;
       if (pickMode) { const f = pickMode; pickMode = null; f(lat, lng); return; }
@@ -470,6 +470,8 @@
         <div class="mrow"><span class="mi">🕒</span><div><b>Record my journey</b><small>Saves your route for “My timeline”, also offline and with the screen off</small></div><button class="toggle${rec ? " on" : ""}" id="recT" aria-label="Record my journey"></button></div>
         <div class="mrow" id="tlOpen" style="cursor:pointer"><span class="mi">📅</span><div><b>My timeline</b><small>Your days, distance and stops passed${NATIVE && NATIVE.pointCount() ? ` · ${NATIVE.pointCount()} points waiting to upload` : ""}</small></div><span>›</span></div>
         <div class="mrow"><span class="mi">👁</span><div><b>Show me to other pilgrims</b><small>Username and approximate area only</small></div><button class="toggle${ME && ME.show_on_map ? " on" : ""}" id="showT"></button></div>
+        <div class="mrow"><span class="mi">🔴</span><div><b>Share my live location</b><small>Other pilgrims see exactly where you are (every ~20 s) while you're online</small></div><button class="toggle${ME && ME.share_live ? " on" : ""}" id="liveT" aria-label="Share my live location"></button></div>
+        <div class="mrow"><span class="mi">🚶</span><div><b>Share my yatra path publicly</b><small>Everyone sees the route you walked (from “Record my journey”) with your username</small></div><button class="toggle${ME && ME.share_path ? " on" : ""}" id="shareT" aria-label="Share my yatra path"></button></div>
         <div class="mrow"><span class="mi">🔄</span><div><b>Sync now</b><small id="syncState">${store.get("lastSync", null) ? "Last synced " + new Date(store.get("lastSync")).toLocaleString("en-IN") : "Not synced yet"}</small></div><button class="btn2 alt" id="syncBtn">Sync</button></div>
         <div class="mrow"><span class="mi">🌐</span><div><b>Server</b><small>${esc(SERVER)}</small></div></div>
         <div class="actions" style="margin-top:14px"><button class="btn2 alt" id="logoutBtn">Log out</button></div>
@@ -483,6 +485,12 @@
     $("#tlOpen").onclick = openTimeline;
     $("#showT").onclick = async () => { if (!online()) return toast("Needs internet.");
       try { ME = await apiJSON("/me/settings", {method: "POST", body: form({show_on_map: ME.show_on_map ? 0 : 1})}); store.set("me", ME); openMenu(); } catch (e) { toast(e.message); } };
+    $("#liveT").onclick = async () => { if (!online()) return toast("Needs internet.");
+      try { ME = await apiJSON("/me/settings", {method: "POST", body: form({share_live: ME.share_live ? 0 : 1})}); store.set("me", ME);
+        toast(ME.share_live ? "Live location ON 🔴 – others can see where you are" : "Live location OFF"); if (ME.share_live) livePing(); openMenu(); } catch (e) { toast(e.message); } };
+    $("#shareT").onclick = async () => { if (!online()) return toast("Needs internet.");
+      try { ME = await apiJSON("/me/settings", {method: "POST", body: form({share_path: ME.share_path ? 0 : 1})}); store.set("me", ME);
+        toast(ME.share_path ? "Your path is now public 🚶" : "Your path is private again"); openMenu(); loadPaths().catch(() => {}); } catch (e) { toast(e.message); } };
     $("#syncBtn").onclick = () => sync(true);
     $("#logoutBtn").onclick = () => logout(false);
   }
@@ -571,18 +579,73 @@
       if (r.status === 200) { const j = await r.json(); store.set("stops", {version: j.version, stops: j.stops, fields: j.fields}); FIELDS = j.fields; setStops(j.stops); drawStops(); }
       const rep = await apiJSON("/reports"); REPORTS = rep.reports; REPORT_KINDS = rep.kinds; store.set("reports", REPORTS); store.set("reportKinds", REPORT_KINDS); drawReports();
       await loadOnline();
+      await loadPaths().catch(() => {});
       store.set("lastSync", Date.now());
       if (manual) toast("Synced ✓");
     } catch (e) { if (manual) toast(e.message || "Sync failed"); }
     finally { syncing = false; updateNetbar(); }
   }
+  const agoText = u => u.live && u.sec < 90 ? "live now" : (u.ago ? u.ago + " min ago" : "online now");
+  const personTip = u => `@${esc(u.u)} · ${agoText(u)} · ${u.live ? "live location" + (u.acc ? " ±" + u.acc + " m" : "") : "approx. area"}`;
+  const personIcon = u => { const c = hue(u.u); return L.divIcon({className: "", iconSize: [30, 30], iconAnchor: [15, 15],
+    html: `<div class="pmark${u.live ? " live" : ""}" style="color:${c}"><span class="ring"></span><div class="dot" style="background:${c}">${esc(u.u[0].toUpperCase())}</div>${u.live ? '<span class="livetag">LIVE</span>' : ""}<span class="lbl">@${esc(u.u)}</span></div>`}); };
   async function loadOnline() {
     const j = await apiJSON("/online"); const list = j.online || [];
     $("#onlineCount").textContent = list.length; layers.people.clearLayers();
-    list.forEach(u => { if (u.lat == null || u.me) return; const c = hue(u.u);
-      L.marker([u.lat, u.lng], {icon: L.divIcon({className: "", iconSize: [30, 30], iconAnchor: [15, 15], html: `<div class="pmark" style="color:${c}"><span class="ring"></span><div class="dot" style="background:${c}">${esc(u.u[0].toUpperCase())}</div><span class="lbl">@${esc(u.u)}</span></div>`})}).addTo(layers.people); });
-    $("#onlineList").innerHTML = list.map(u => `<div class="ou" data-lat="${u.lat ?? ""}" data-lng="${u.lng ?? ""}"><div class="av" style="background:${hue(u.u)}">${esc(u.u[0].toUpperCase())}</div><div><b>@${esc(u.u)}</b>${u.me ? " <small>(you)</small>" : ""}<br><small>${u.ago ? u.ago + " min ago" : "online now"}</small></div></div>`).join("") || `<div class="empty">No one else online.</div>`;
+    list.forEach(u => { if (u.lat == null || u.me) return;
+      L.marker([u.lat, u.lng], {icon: personIcon(u), zIndexOffset: u.live ? 500 : 0}).bindTooltip(personTip(u)).addTo(layers.people); });
+    $("#onlineList").innerHTML = list.map(u => `<div class="ou" data-lat="${u.lat ?? ""}" data-lng="${u.lng ?? ""}"><div class="av" style="background:${hue(u.u)}">${esc(u.u[0].toUpperCase())}</div><div><b>@${esc(u.u)}</b>${u.me ? " <small>(you)</small>" : ""}<br><small>${u.live ? "🔴 " : ""}${agoText(u)}${u.live ? " · live location" : ""}</small></div></div>`).join("") || `<div class="empty">No one else online.</div>`;
   }
+
+
+  // ================================================================ yatra paths (shared GPS tracks)
+  let PATHS = [];
+  let SEL = -1;       // which path is on the map (one at a time); -1 = none
+  function drawPaths(layer, list) {
+    layer.clearLayers();
+    list.forEach((p, i) => {
+      if (i !== SEL) return;
+      const c = p.me ? "#1a73e8" : hue(p.u);
+      const tip = `🚶 @${esc(p.u)}${p.me ? " (you)" : ""} · ${p.km} km · ${p.days} day(s) · ${esc(p.from)} – ${esc(p.to)}`;
+      p.segs.forEach(s => {
+        L.polyline(s, {color: "#fff", weight: p.me ? 7 : 6, opacity: .8, interactive: false}).addTo(layer);
+        L.polyline(s, {color: c, weight: p.me ? 4 : 3, opacity: .9}).bindTooltip(tip, {sticky: true}).addTo(layer);
+      });
+      L.circleMarker(p.last, {radius: 5, color: "#fff", weight: 2, fillColor: c, fillOpacity: 1}).bindTooltip(tip).addTo(layer);
+    });
+  }
+  function pathListHtml(list) {
+    return list.map((p, i) => `<div class="ou pr${i === SEL ? " sel" : ""}" data-pi="${i}"><div class="av nodot" style="background:${p.me ? "#1a73e8" : hue(p.u)}">${esc(p.u[0].toUpperCase())}</div>
+      <div><b>@${esc(p.u)}</b>${p.me ? ` <small>(you${p.shared ? ", public" : ", only you see it"})</small>` : ""}<br>
+      <small>${p.km} km · ${p.days} day(s) · ${esc(p.from)} – ${esc(p.to)}</small></div></div>`).join("")
+      || `<div class="empty">No one is sharing a path yet.</div>`;
+  }
+  function pathNavHtml(list) {
+    if (!list.length) return "";
+    const p = list[SEL];
+    return `<div class="pathnav"><button class="btn2 alt" data-pn="-1" aria-label="Previous path">◀</button>
+      <div>${p ? `<b>@${esc(p.u)}</b>${p.me ? " (you)" : ""}<small>${p.km} km · ${p.days} day(s)</small>` : `<small>Tap a pilgrim, or ▶ to see paths one by one</small>`}</div>
+      <button class="btn2 alt" data-pn="1" aria-label="Next path">▶</button>${p ? `<button class="btn2 alt" data-pn="0" aria-label="Hide path">✕</button>` : ""}</div>`;
+  }
+  function stepPath(list, d) { SEL = d === 0 ? -1 : (SEL < 0 && d < 0 ? list.length - 1 : (SEL + d + list.length) % list.length); return SEL; }
+  function fitPath(p) { const pts = p.segs.flat(); if (pts.length) map.fitBounds(pts, {padding: [40, 40]}); }
+  PATHS = store.get("paths", []);
+  // my own recent points that are still on the phone (not yet uploaded) extend my line, also offline
+  function withPending(list) {
+    if (!NATIVE || !ME) return list;
+    let pend = []; try { pend = JSON.parse(NATIVE.pendingPoints(5000)).map(p => [p.lat, p.lng]); } catch (e) { /* none */ }
+    if (pend.length < 2) return list;
+    const out = list.map(p => p.me ? Object.assign({}, p, {segs: p.segs.concat([[p.last].concat(pend)]), last: pend[pend.length - 1]}) : p);
+    if (!out.some(p => p.me)) out.unshift({u: ME.username, me: true, shared: !!ME.share_path, km: 0, days: 1, from: "today", to: "today", last: pend[pend.length - 1], segs: [pend]});
+    return out;
+  }
+  function renderPaths() {
+    const list = withPending(PATHS); if (SEL >= list.length) SEL = -1;
+    drawPaths(layers.paths, list); $("#pathNav").innerHTML = pathNavHtml(list);
+    $("#pathCount").textContent = PATHS.filter(p => !p.me || p.shared).length;
+    $("#pathList").innerHTML = pathListHtml(list); $("#pathList")._list = list;
+  }
+  async function loadPaths() { const j = await apiJSON("/paths"); PATHS = j.paths || []; store.set("paths", PATHS); renderPaths(); }
 
   // ================================================================ controls + start
   function wireControls() {
@@ -591,7 +654,12 @@
       if (f === "near" && !filters.has("near") && !myPos) return withMyPos(() => { filters.add("near"); b.classList.add("on"); render(); map.flyTo(myPos, 10); });
       if (filters.has(f)) filters.delete(f); else filters.add(f); b.classList.toggle("on", filters.has(f)); render(); });
     $$("[data-tab]").forEach(b => b.onclick = () => { const t = b.dataset.tab; $$("[data-tab]").forEach(x => x.setAttribute("aria-selected", x === b));
-      $("#stopsTab").hidden = t !== "stops"; $("#onlineTab").hidden = t !== "online"; if (t === "online" && online()) loadOnline().catch(() => {}); });
+      $("#stopsTab").hidden = t !== "stops"; $("#onlineTab").hidden = t !== "online"; $("#pathsTab").hidden = t !== "paths";
+      if (t === "online" && online()) loadOnline().catch(() => {});
+      if (t === "paths") { renderPaths(); if (online()) loadPaths().catch(() => {}); } });
+    const showPath = i => { SEL = i; renderPaths(); const l = $("#pathList")._list; if (l[SEL]) { fitPath(l[SEL]); setSheet("min"); } };
+    $("#pathList").addEventListener("click", e => { const r = e.target.closest(".pr"); if (r) showPath(+r.dataset.pi); });
+    $("#pathNav").addEventListener("click", e => { const b = e.target.closest("[data-pn]"); if (b) showPath(stepPath($("#pathList")._list, +b.dataset.pn)); });
     $("#onlineList").addEventListener("click", e => { const r = e.target.closest(".ou"); if (r && r.dataset.lat) map.flyTo([+r.dataset.lat, +r.dataset.lng], 12); });
     $("#locBtn").onclick = () => withMyPos(p => map.flyTo(p, 14));
     $("#zIn").onclick = () => map.zoomIn(); $("#zOut").onclick = () => map.zoomOut();
@@ -600,16 +668,24 @@
     window.addEventListener("online", () => { updateNetbar(); sync(); });
     window.addEventListener("offline", updateNetbar);
   }
+  // live location: every 20 s send my position and refresh others, while the app is open and online
+  async function livePing() {
+    if (!TOKEN || !online() || syncing || document.hidden) return;
+    try {
+      if (ME && ME.share_live && lastFix) await api("/presence", {method: "POST", body: form({lat: lastFix.lat, lng: lastFix.lng, accuracy: lastFix.acc})});
+      await loadOnline();
+    } catch (e) { /* try next time */ }
+  }
   let started = false;
   function startApp() {
     $("#auth").hidden = true; $("#appRoot").hidden = false;
     $("#avatarBtn").textContent = ((ME && ME.username) || "?")[0].toUpperCase();
     if (!started) {
-      started = true; initMap(); wireControls(); drawReports();
+      started = true; initMap(); wireControls(); drawReports(); renderPaths();
       if (placed.length) map.fitBounds(placed.map(o => [o.lat, o.lng]), {padding: [40, 40]});
       if (navigator.geolocation) navigator.geolocation.watchPosition(setMyPos, () => {}, {enableHighAccuracy: true, maximumAge: 30000});
       if (NATIVE && store.get("recording", true) && !NATIVE.isTracking()) store.set("recording", NATIVE.startTracking());
-      setInterval(sync, 60000);
+      setInterval(sync, 60000); setInterval(livePing, 20000);
     }
     updateNetbar(); sync();
   }

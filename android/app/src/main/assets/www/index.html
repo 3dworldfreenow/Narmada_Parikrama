@@ -68,6 +68,7 @@
       <div class="tabs2" role="tablist">
         <button data-tab="stops" aria-selected="true">Stops <span id="stopCount" class="cnt"></span></button>
         <button data-tab="online" aria-selected="false"><span class="live"></span>Online <span id="onlineCount" class="cnt">–</span></button>
+        <button data-tab="paths" aria-selected="false">🚶 Paths <span id="pathCount" class="cnt">0</span></button>
       </div>
       <div id="stopsTab">
         <div class="chiprow">
@@ -88,6 +89,11 @@
       <div id="onlineTab" hidden>
         <p class="hintline">Pilgrims active in the last few minutes (approximate area). Needs internet.</p>
         <div class="list" id="onlineList"></div>
+      </div>
+      <div id="pathsTab" hidden>
+        <p class="hintline">Yatra paths shared by pilgrims (GPS). Share yours: ☰ Menu → Share my yatra path. Works offline with the last synced paths.</p>
+        <div id="pathNav"></div>
+        <div class="list" id="pathList"></div>
       </div>
     </div>
     <div id="detailView" hidden></div>

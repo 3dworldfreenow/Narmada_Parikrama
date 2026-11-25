@@ -459,7 +459,7 @@
       meCircle = L.circle(myPos, {radius: myAcc, color: "#1a73e8", weight: 1, fillOpacity: .08, interactive: false}).addTo(map);
       meMarker = L.marker(myPos, {icon: L.divIcon({className: "", html: '<div class="mepin"></div>', iconSize: [18, 18]}), zIndexOffset: 1000}).addTo(map);
     } else { meMarker.setLatLng(myPos); meCircle.setLatLng(myPos); if (meCircle.setRadius) meCircle.setRadius(myAcc); }
-    if (Date.now() - lastSent > 60000) beat(p);
+    if (Date.now() - lastSent > (LIVE ? 20000 : 60000)) beat(p);
   }
   function withMyPos(cb, fail) {
     if (myPos) return cb(myPos);
@@ -477,6 +477,10 @@
   beat(null);
 
   // ================================================================ online pilgrims
+  const agoText = u => u.live && u.sec < 90 ? "live now" : (u.ago ? u.ago + " min ago" : "online now");
+  const personTip = u => `@${esc(u.u)} · ${agoText(u)} · ${u.live ? "live location" + (u.acc ? " ±" + u.acc + " m" : "") : "approx. area"}`;
+  const personIcon = u => { const c = hue(u.u); return L.divIcon({className: "", iconSize: [30, 30], iconAnchor: [15, 15],
+    html: `<div class="pmark${u.live ? " live" : ""}" style="color:${c}"><span class="ring"></span><div class="dot" style="background:${c}">${esc(u.u[0].toUpperCase())}</div>${u.live ? '<span class="livetag">LIVE</span>' : ""}<span class="lbl">@${esc(u.u)}</span></div>`}); };
   async function loadOnline() {
     try {
       const j = await (await fetch(URLS.online)).json();
@@ -486,19 +490,64 @@
       list.forEach(u => {
         if (u.lat == null || u.me) return;
         const c = hue(u.u);
-        L.marker([u.lat, u.lng], {icon: L.divIcon({className: "", iconSize: [30, 30], iconAnchor: [15, 15],
-          html: `<div class="pmark" style="color:${c}"><span class="ring"></span><div class="dot" style="background:${c}">${esc(u.u[0].toUpperCase())}</div><span class="lbl">@${esc(u.u)}</span></div>`})})
-          .bindTooltip(`@${esc(u.u)} · ${u.ago ? u.ago + " min ago" : "online now"} · approx. area`, {className: "stoptip"}).addTo(peopleLayer);
+        L.marker([u.lat, u.lng], {icon: personIcon(u), zIndexOffset: u.live ? 500 : 0})
+          .bindTooltip(personTip(u), {className: "stoptip"}).addTo(peopleLayer);
       });
       $("#onlineList").innerHTML = list.length ? list.map(u => `
         <div class="ou" data-lat="${u.lat ?? ""}" data-lng="${u.lng ?? ""}">
           <div class="av" style="background:${hue(u.u)}">${esc(u.u[0].toUpperCase())}</div>
           <div><b>@${esc(u.u)}</b>${u.me ? " <small>(you)</small>" : ""}${u.role ? ` <span class="tag o">${u.role === "admin" ? "Admin" : "Super user"}</span>` : ""}<br>
-          <small>${u.ago ? u.ago + " min ago" : "online now"}${u.lat == null ? " · location hidden" : ""}</small></div></div>`).join("")
+          <small>${u.live ? "🔴 " : ""}${agoText(u)}${u.lat == null ? " · location hidden" : u.live ? " · live location" : ""}</small></div></div>`).join("")
         : `<div class="empty">No one else is online right now.</div>`;
     } catch (e) { /* offline */ }
   }
   $("#onlineList").addEventListener("click", e => { const r = e.target.closest(".ou"); if (r && r.dataset.lat) map.flyTo([+r.dataset.lat, +r.dataset.lng], 12); });
+
+
+  // ================================================================ yatra paths (shared GPS tracks)
+  let PATHS = [];
+  let SEL = -1;       // which path is on the map (one at a time); -1 = none
+  function drawPaths(layer, list) {
+    layer.clearLayers();
+    list.forEach((p, i) => {
+      if (i !== SEL) return;
+      const c = p.me ? "#1a73e8" : hue(p.u);
+      const tip = `🚶 @${esc(p.u)}${p.me ? " (you)" : ""} · ${p.km} km · ${p.days} day(s) · ${esc(p.from)} – ${esc(p.to)}`;
+      p.segs.forEach(s => {
+        L.polyline(s, {color: "#fff", weight: p.me ? 7 : 6, opacity: .8, interactive: false}).addTo(layer);
+        L.polyline(s, {color: c, weight: p.me ? 4 : 3, opacity: .9}).bindTooltip(tip, {sticky: true}).addTo(layer);
+      });
+      L.circleMarker(p.last, {radius: 5, color: "#fff", weight: 2, fillColor: c, fillOpacity: 1}).bindTooltip(tip).addTo(layer);
+    });
+  }
+  function pathListHtml(list) {
+    return list.map((p, i) => `<div class="ou pr${i === SEL ? " sel" : ""}" data-pi="${i}"><div class="av nodot" style="background:${p.me ? "#1a73e8" : hue(p.u)}">${esc(p.u[0].toUpperCase())}</div>
+      <div><b>@${esc(p.u)}</b>${p.me ? ` <small>(you${p.shared ? ", public" : ", only you see it"})</small>` : ""}<br>
+      <small>${p.km} km · ${p.days} day(s) · ${esc(p.from)} – ${esc(p.to)}</small></div></div>`).join("")
+      || `<div class="empty">No one is sharing a path yet.</div>`;
+  }
+  function pathNavHtml(list) {
+    if (!list.length) return "";
+    const p = list[SEL];
+    return `<div class="pathnav"><button class="btn2 alt" data-pn="-1" aria-label="Previous path">◀</button>
+      <div>${p ? `<b>@${esc(p.u)}</b>${p.me ? " (you)" : ""}<small>${p.km} km · ${p.days} day(s)</small>` : `<small>Tap a pilgrim, or ▶ to see paths one by one</small>`}</div>
+      <button class="btn2 alt" data-pn="1" aria-label="Next path">▶</button>${p ? `<button class="btn2 alt" data-pn="0" aria-label="Hide path">✕</button>` : ""}</div>`;
+  }
+  function stepPath(list, d) { SEL = d === 0 ? -1 : (SEL < 0 && d < 0 ? list.length - 1 : (SEL + d + list.length) % list.length); return SEL; }
+  function fitPath(p) { const pts = p.segs.flat(); if (pts.length) map.fitBounds(pts, {padding: [40, 40]}); }
+  const pathLayer = L.layerGroup().addTo(map);
+  async function loadPaths() {
+    try {
+      PATHS = (await (await fetch(URLS.paths)).json()).paths || [];
+      $("#pathCount").textContent = PATHS.filter(p => !p.me || p.shared).length;
+      if (SEL >= PATHS.length) SEL = -1;
+      renderPaths();
+    } catch (e) { /* offline */ }
+  }
+  function renderPaths() { drawPaths(pathLayer, PATHS); $("#pathNav").innerHTML = pathNavHtml(PATHS); $("#pathList").innerHTML = pathListHtml(PATHS); }
+  function showPath(i) { SEL = i; renderPaths(); if (PATHS[SEL]) { fitPath(PATHS[SEL]); setSheet("min"); } }
+  $("#pathList").addEventListener("click", e => { const r = e.target.closest(".pr"); if (r) showPath(+r.dataset.pi); });
+  $("#pathNav").addEventListener("click", e => { const b = e.target.closest("[data-pn]"); if (b) showPath(stepPath(PATHS, +b.dataset.pn)); });
 
   // ================================================================ controls
   function alertMsg(t) {
@@ -514,7 +563,8 @@
   });
   $$("[data-tab]").forEach(b => b.onclick = () => {
     const tab = b.dataset.tab; $$("[data-tab]").forEach(x => x.setAttribute("aria-selected", x === b));
-    $("#stopsTab").hidden = tab !== "stops"; $("#onlineTab").hidden = tab !== "online"; if (tab === "online") loadOnline();
+    $("#stopsTab").hidden = tab !== "stops"; $("#onlineTab").hidden = tab !== "online"; $("#pathsTab").hidden = tab !== "paths";
+    if (tab === "online") loadOnline(); if (tab === "paths") loadPaths();
   });
   $("#locBtn").onclick = () => withMyPos(p => map.flyTo(p, 14));
   $("#zIn").onclick = () => map.zoomIn();
@@ -530,6 +580,6 @@
   function setSheet(s) { if (window.innerWidth > 760) return; panel.dataset.size = s; setTimeout(() => map.invalidateSize(), 260); }
   $("#grip").onclick = () => setSheet(order[(order.indexOf(panel.dataset.size) + 1) % 3]);
 
-  render(); fitVisible(); loadOnline(); loadReports();
-  setInterval(loadOnline, 30000); setInterval(loadReports, 120000);
+  render(); fitVisible(); loadOnline(); loadReports(); loadPaths();
+  setInterval(loadOnline, 20000); setInterval(loadReports, 120000); setInterval(loadPaths, 180000);
 })();

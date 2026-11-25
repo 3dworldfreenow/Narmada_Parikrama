@@ -56,6 +56,8 @@ TIMELINE_MIN_M = float(os.environ.get("TIMELINE_MIN_M", "100"))
 TIMELINE_MIN_S = float(os.environ.get("TIMELINE_MIN_S", "900"))
 TIMELINE_MAX_ACC_M = float(os.environ.get("TIMELINE_MAX_ACC_M", "250"))   # skip very rough GPS fixes
 TIMELINE_DAYS = int(os.environ.get("TIMELINE_DAYS", "400"))               # keep history this long
+PATH_HIDE_MIN = int(os.environ.get("PATH_HIDE_MIN", "0"))     # public paths: hide the newest N minutes (0 = show all)
+PATH_GAP_KM = 5.0          # break a public path where GPS jumped (bus, phone off) more than this
 MAX_PHOTOS = 6
 MAX_PHOTO_MB = 10
 MAX_VIDEO_MB = 60
@@ -215,7 +217,9 @@ def init_db():
                             ("users", "last_seen_ts", "REAL"), ("users", "last_lat", "REAL"),
                             ("users", "last_lng", "REAL"), ("users", "last_acc", "REAL"),
                             ("users", "show_on_map", "INTEGER DEFAULT 1"),
-                            ("users", "save_timeline", "INTEGER DEFAULT 1")]:
+                            ("users", "save_timeline", "INTEGER DEFAULT 1"),
+                            ("users", "share_path", "INTEGER DEFAULT 0"),
+                            ("users", "share_live", "INTEGER DEFAULT 0")]:
         cols = [r[1] for r in db.execute(f"PRAGMA table_info({table})")]
         if col not in cols:
             db.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typ}")
@@ -905,23 +909,72 @@ def api_heartbeat():
 
 @app.route("/api/online")
 def api_online():
-    """Users seen in the last ONLINE_MINUTES. Positions are rounded to ~1 km for privacy."""
+    """Users seen in the last ONLINE_MINUTES. Positions are rounded to ~1 km for privacy,
+    except for pilgrims who chose "share my live location" – those are exact."""
     me = current_user()
     since = datetime.now(timezone.utc).timestamp() - ONLINE_MINUTES * 60
     rows = get_db().execute(
-        """SELECT id, username, role, last_lat, last_lng, last_seen_ts, show_on_map FROM users
+        """SELECT id, username, role, last_lat, last_lng, last_acc, last_seen_ts, show_on_map, share_live FROM users
            WHERE last_seen_ts >= ? AND username IS NOT NULL ORDER BY last_seen_ts DESC""", (since,)).fetchall()
     out = []
     for r in rows:
-        visible = bool(r["show_on_map"]) and r["last_lat"] is not None
-        out.append({
+        live = bool(r["share_live"]) and r["last_lat"] is not None
+        visible = live or (bool(r["show_on_map"]) and r["last_lat"] is not None)
+        nd = 5 if live else 2
+        out.append({"live": live, "acc": round(r["last_acc"]) if live and r["last_acc"] is not None else None,
+                    "sec": int(datetime.now(timezone.utc).timestamp() - r["last_seen_ts"]),
             "u": r["username"], "me": r["id"] == me["id"],
             "role": r["role"] if r["role"] in ("admin", "super") else "",
-            "lat": round(r["last_lat"], 2) if visible else None,
-            "lng": round(r["last_lng"], 2) if visible else None,
+            "lat": round(r["last_lat"], nd) if visible else None,
+            "lng": round(r["last_lng"], nd) if visible else None,
             "ago": int((datetime.now(timezone.utc).timestamp() - r["last_seen_ts"]) // 60),
         })
     return {"online": out, "minutes": ONLINE_MINUTES}
+
+
+def public_paths(me_id):
+    """Yatra paths of pilgrims who chose to share them (plus my own, which only I see unless shared).
+    Thinned to ~150 m steps and split where the GPS jumped, so lines don't cut across the map."""
+    db = get_db()
+    users = db.execute("""SELECT id, username, share_path FROM users
+                          WHERE username IS NOT NULL AND (share_path=1 OR id=?)""", (me_id,)).fetchall()
+    cutoff = datetime.now(timezone.utc).timestamp() - PATH_HIDE_MIN * 60
+    out = []
+    for u in users:
+        mine = u["id"] == me_id
+        rows = db.execute("SELECT lat, lng, ts FROM location_points WHERE user_id=? AND ts<=? ORDER BY ts",
+                          (u["id"], datetime.now(timezone.utc).timestamp() if mine else cutoff)).fetchall()
+        if not rows:
+            continue
+        segs, seg, km, prev, days = [], [], 0.0, None, set()
+        for r in rows:
+            days.add(_ist_day(r["ts"]))
+            if prev is not None:
+                d = haversine_km(prev["lat"], prev["lng"], r["lat"], r["lng"])
+                if d > PATH_GAP_KM:
+                    if len(seg) > 1: segs.append(seg)
+                    seg, prev = [], None
+                elif d < 0.15 and r is not rows[-1]:
+                    continue
+                else:
+                    km += d
+            seg.append([round(r["lat"], 5), round(r["lng"], 5)])
+            prev = r
+        if len(seg) > 1: segs.append(seg)
+        if not segs:
+            continue
+        out.append({"u": u["username"], "me": mine, "shared": bool(u["share_path"]),
+                    "km": round(km, 1), "days": len(days),
+                    "from": datetime.fromtimestamp(rows[0]["ts"], IST).strftime("%d %b %Y"),
+                    "to": datetime.fromtimestamp(rows[-1]["ts"], IST).strftime("%d %b %Y"),
+                    "last": [round(rows[-1]["lat"], 5), round(rows[-1]["lng"], 5)], "segs": segs})
+    out.sort(key=lambda p: (not p["me"], -p["km"]))
+    return {"paths": out, "hide_min": PATH_HIDE_MIN}
+
+
+@app.route("/api/paths")
+def api_paths():
+    return public_paths(current_user()["id"])
 
 
 @app.route("/api/reports")
@@ -1005,13 +1058,15 @@ def settings():
     if request.method == "POST":
         show = 1 if request.form.get("show_on_map") == "1" else 0
         save_tl = 1 if request.form.get("save_timeline") == "1" else 0
+        share = 1 if request.form.get("share_path") == "1" else 0
+        live = 1 if request.form.get("share_live") == "1" else 0
         name = request.form.get("username", "").strip().lower().lstrip("@")
         err = username_error(name, user["id"]) if name != (user["username"] or "") else None
         if err:
             flash(err, "error")
         else:
-            get_db().execute("UPDATE users SET show_on_map=?, save_timeline=?, username=? WHERE id=?",
-                             (show, save_tl, name, user["id"]))
+            get_db().execute("UPDATE users SET show_on_map=?, save_timeline=?, share_path=?, share_live=?, username=? WHERE id=?",
+                             (show, save_tl, share, live, name, user["id"]))
             get_db().commit()
             flash("Settings saved.", "ok")
             return redirect(url_for("settings"))

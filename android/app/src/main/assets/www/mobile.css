@@ -45,3 +45,8 @@ html,body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent}
 .gallery{display:flex;gap:8px;overflow-x:auto;margin:8px 0}
 .gallery img{height:120px;border-radius:10px}
 .toasts{top:calc(104px + env(safe-area-inset-top))}
+.ou .av.nodot::after{display:none}
+.pathnav{display:flex;align-items:center;gap:8px;margin:0 0 8px;padding:8px;border-radius:12px;background:#e8f0fe}
+.pathnav>div{flex:1;min-width:0}.pathnav small{display:block;color:#5f6368}
+.ou.pr.sel{background:#e8f0fe}
+.pmark.live .dot{box-shadow:0 0 0 3px #fff,0 0 0 5px #d93025}.pmark .livetag{position:absolute;top:-8px;right:-14px;background:#d93025;color:#fff;font:700 9px/1 sans-serif;padding:2px 4px;border-radius:6px}
