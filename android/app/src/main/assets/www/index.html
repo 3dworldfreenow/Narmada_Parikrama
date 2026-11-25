@@ -103,9 +103,12 @@
     <div id="updateView" hidden></div>
     <div id="menuView" hidden></div>
     <div id="timelineView" hidden></div>
+    <div id="photoView" hidden></div>
   </aside>
 
+  <input type="file" id="camIn" accept="image/*" capture="environment" hidden>
   <div class="fabs">
+    <button class="fab camfab" id="camBtn" aria-label="Take a geotagged photo" title="Camera: photo with place and time">📷</button>
     <div class="zoomgrp">
       <button class="fab" id="zIn" aria-label="Zoom in">+</button>
       <button class="fab" id="zOut" aria-label="Zoom out">−</button>
@@ -119,6 +122,7 @@
   </div>
 </div>
 <div class="toasts" id="toasts"></div>
+<div class="pviewer" id="pviewer" hidden></div>
 
 <script src="seed-stops.js"></script>
 <script src="river-data.js"></script>

@@ -549,6 +549,32 @@
   $("#pathList").addEventListener("click", e => { const r = e.target.closest(".pr"); if (r) showPath(+r.dataset.pi); });
   $("#pathNav").addEventListener("click", e => { const b = e.target.closest("[data-pn]"); if (b) showPath(stepPath(PATHS, +b.dataset.pn)); });
 
+  // ================================================================ public geotagged photos (from the app), shown when zoomed in
+  const photoLayer = L.layerGroup().addTo(map); let photoTimer = null, PHOTOS = {};
+  function loadPhotos() {
+    clearTimeout(photoTimer);
+    photoTimer = setTimeout(async () => {
+      photoLayer.clearLayers(); if (map.getZoom() < 12) return;
+      const b = map.getBounds().pad(0.3);
+      try {
+        const j = await (await fetch(`${URLS.photos}?bbox=${[b.getSouth(), b.getWest(), b.getNorth(), b.getEast()].map(x => x.toFixed(4)).join(",")}`)).json();
+        (j.photos || []).forEach(ph => { PHOTOS[ph.id] = ph;
+          L.marker([ph.lat, ph.lng], {icon: L.divIcon({className: "", iconSize: [46, 46], iconAnchor: [23, 46], html: `<div class="phmark"><img src="${esc(ph.thumb)}" alt="" loading="lazy"></div>`}), zIndexOffset: 300})
+            .bindPopup(`<div class="phpop"><a href="${esc(ph.full)}" target="_blank" rel="noopener"><img src="${esc(ph.full)}" alt="Photo by @${esc(ph.u)}"></a>
+              <b>@${esc(ph.u)}</b> · ${esc(ph.when)}${ph.near ? " · near " + esc(ph.near) : ""}${ph.caption ? `<p>${esc(ph.caption)}</p>` : ""}
+              ${ph.can_delete ? `<button class="btn2 alt" data-phdel="${ph.id}">Remove photo</button>` : ""}</div>`, {maxWidth: 340, minWidth: 260})
+            .addTo(photoLayer); });
+      } catch (e) { /* offline */ }
+    }, 400);
+  }
+  map.on("moveend zoomend", loadPhotos);
+  document.addEventListener("click", async e => {
+    const b = e.target.closest("[data-phdel]"); if (!b) return;
+    if (!b.dataset.sure) { b.dataset.sure = 1; b.textContent = "Click again to remove"; return; }
+    const r = await post(URLS.photoDel.replace(/0\/delete$/, b.dataset.phdel + "/delete"), {});
+    if (r.ok) { map.closePopup(); alertMsg("Photo removed."); loadPhotos(); } else alertMsg("Could not remove it.");
+  });
+
   // ================================================================ controls
   function alertMsg(t) {
     let box = $(".toasts"); if (!box) { box = document.createElement("div"); box.className = "toasts"; document.body.appendChild(box); }

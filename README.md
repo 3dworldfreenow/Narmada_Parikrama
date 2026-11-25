@@ -11,6 +11,12 @@ An English, searchable guide to the full Narmada Parikrama (about 2,934 km, 805 
 - **Directions.** 🚗 Car, 🏍 Bike or 🚶 Paidal, from your location, any searched place, a stop or a pin on the map. Shows distance, time, other routes in grey, turn-by-turn steps, and warnings for path reports along the way. "Start in Google Maps" opens live navigation. Routing is OSRM on OpenStreetMap data (routing.openstreetmap.de, free fair-use service).
 - **Path reports.** Pilgrims can mark a spot as road closed, muddy, flooded, bridge/boat problem, danger, drinking water, food, rest place, good path or other, optionally only for walkers, bikes or cars. The sender must be within 5 km (`REPORT_RADIUS_KM`). A user's reports wait for admin approval; a super user's go live at once. Reports fade after 45 days (`REPORT_DAYS`).
 - **My timeline.** Like Google Timeline: each user's own journey is saved privately while the app is open (a point every ~100 m or 15 min). The timeline page shows each day's route, distance, times and the parikrama stops passed. Only the user can see it, not other users or admins. They can pause it in Settings and delete a day or everything. Web pages can't record while the phone is locked or the app is closed.
+- **Shared yatra paths (opt-in).** Under Settings (website) or ☰ Menu (app), a pilgrim can turn on **Share my yatra path publicly**. Their GPS timeline then appears in the **🚶 Paths** tab for everyone, shown on the map **one path at a time** with ◀ ▶. Lines are thinned and split where the GPS jumped (bus, phone off), and only walked km are counted. Off by default.
+- **Live location (opt-in).** **Share my live location** shows a pilgrim's exact position with a red LIVE badge, updated about every 20 seconds while they are online. Everyone else stays at the ~1 km approximate area, or hidden.
+- **📷 Geotagged camera photos (app).** The green camera button opens the phone camera. Each photo is stamped on its lower part with the nearest stop, GPS coordinates and accuracy, the phone's date and time, and @username. It is saved to the phone gallery (Pictures › Narmada Parikrama) and to the user's timeline. A **Public / Only me** switch decides where it goes:
+  - **Public** photos are sent to the server (or queued while offline) and appear as photo pins for everyone when zoomed in to street level (zoom 12+), on the app and the website.
+  - **Private** photos never leave the phone.
+  - The owner can make a photo public or private later, or delete it. The admin can remove any public photo.
 
 - **Search and filters.** Search by village, temple or ashram in English, or by Marathi village name. Filter by stage, cooked food, sadavrat (rations), place to stay, built ghat, bridge or special note.
 - **Accounts.** Users register with name, email, mobile number and password. Mobile and email are visible only to the admin.
@@ -167,6 +173,7 @@ A JSON API with token login, used by the Android app; see the top of `api_v1.py`
 | `OSM_RADIUS_KM` | Distance from an approximate OpenStreetMap pin beyond which the admin is warned (default `5`). |
 | `GPS_MAX_ACCURACY_M` | Reject GPS readings less accurate than this (default `1000`). |
 | `REQUIRE_GPS` | Set to `0` to turn the location check off. |
+| `PATH_HIDE_MIN` | Hide the newest N minutes of shared yatra paths from others, for safety (default `0`, show everything). |
 
 **GPS needs HTTPS.** Phones only share location with `https://` sites. PythonAnywhere and Render give you HTTPS automatically. Admins can update without GPS. GPS can be faked by a determined person, so the admin approval step still matters.
 

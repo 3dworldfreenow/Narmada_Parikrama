@@ -31,8 +31,10 @@
 
   // IndexedDB queue (keeps photos as blobs while offline)
   const idb = new Promise((res, rej) => {
-    const r = indexedDB.open("narmada", 1);
-    r.onupgradeneeded = () => r.result.createObjectStore("queue", {keyPath: "id", autoIncrement: true});
+    const r = indexedDB.open("narmada", 2);
+    r.onupgradeneeded = () => { const d = r.result;
+      if (!d.objectStoreNames.contains("queue")) d.createObjectStore("queue", {keyPath: "id", autoIncrement: true});
+      if (!d.objectStoreNames.contains("photos")) d.createObjectStore("photos", {keyPath: "id"}); };   // my camera photos (private stay here)
     r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
   });
   const qTx = async (mode, fn) => { const db = await idb; return new Promise((res, rej) => {
@@ -41,6 +43,12 @@
   const queueAdd = item => qTx("readwrite", st => st.add({...item, created: Date.now()}));
   const queueAll = () => qTx("readonly", st => st.getAll());
   const queueDel = id => qTx("readwrite", st => st.delete(id));
+  const phTx = async (mode, fn) => { const db = await idb; return new Promise((res, rej) => {
+    const tx = db.transaction("photos", mode), st = tx.objectStore("photos"); const out = fn(st);
+    tx.oncomplete = () => res(out && out.result !== undefined ? out.result : out); tx.onerror = () => rej(tx.error); }); };
+  const photoPut = rec => phTx("readwrite", st => st.put(rec));
+  const photoAll = () => phTx("readonly", st => st.getAll());
+  const photoDel = id => phTx("readwrite", st => st.delete(id));
 
   // ================================================================ server API
   const online = () => navigator.onLine !== false;
@@ -114,12 +122,13 @@
       L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 19, attribution: ATTR}).addTo(map);
       if (!online()) setTimeout(() => toast("No offline map yet – open ☰ Menu → Offline map when you have Wi-Fi."), 1500);
     }
-    ["route", "paths", "stops", "reports", "people", "road", "pin", "track"].forEach(k => layers[k] = L.layerGroup().addTo(map));
+    ["route", "paths", "stops", "reports", "photos", "people", "road", "pin", "track"].forEach(k => layers[k] = L.layerGroup().addTo(map));
     map.on("click", e => {
       const {lat, lng} = e.latlng;
       if (pickMode) { const f = pickMode; pickMode = null; f(lat, lng); return; }
       openPlace({label: "Dropped pin", sub: `${lat.toFixed(5)}, ${lng.toFixed(5)}`, lat, lng});
     });
+    map.on("moveend zoomend", fetchAreaPhotos);
     drawStops();
   }
   function drawStops() {
@@ -133,7 +142,7 @@
   }
 
   // ================================================================ panel views
-  const VIEWS = ["listView", "detailView", "placeView", "dirView", "reportView", "updateView", "menuView", "timelineView"];
+  const VIEWS = ["listView", "detailView", "placeView", "dirView", "reportView", "updateView", "menuView", "timelineView", "photoView"];
   const viewStack = [];
   function show(v, push = true) {
     const cur = VIEWS.find(x => !$("#" + x).hidden);
@@ -142,7 +151,7 @@
     if (v !== "listView") setSheet("half");
   }
   function back() { const v = viewStack.pop(); if (!v) return false; show(v, false); if (v === "listView") render(false); return true; }
-  window.appBack = () => { if (!$("#results").hidden) { $("#results").hidden = true; return true; } if (pickMode) { pickMode = null; return true; } return back(); };
+  window.appBack = () => { if (!$("#pviewer").hidden) { $("#pviewer").hidden = true; return true; } if (!$("#results").hidden) { $("#results").hidden = true; return true; } if (pickMode) { pickMode = null; return true; } return back(); };
   const backBtn = l => `<button class="back" data-back>← ${l || "Back"}</button>`;
   document.addEventListener("click", e => { if (e.target.closest("[data-back]")) back(); });
   const panel = $("#panel");
@@ -519,17 +528,27 @@
   async function openTimeline() {
     $("#timelineView").innerHTML = `<div class="dhead">${backBtn()}<h2 style="font-size:20px">🕒 My timeline</h2><div class="sub">Only you can see this.</div></div><div class="dbody" id="tlBody"><div class="empty">Loading…</div></div>`;
     show("timelineView");
-    if (!online()) { $("#tlBody").innerHTML = `<div class="empty">Your journey is being saved on this phone${NATIVE ? ` (${NATIVE.pointCount()} points waiting)` : ""}.<br>Connect to the internet to upload it and see your days.</div>`; return; }
+    await loadLocalPhotos();
+    const byDay = {}; LOCAL_PHOTOS.slice().sort((a, b) => b.ts - a.ts).forEach(r => (byDay[dayOf(r.ts)] = byDay[dayOf(r.ts)] || []).push(r));
+    if (!online()) {
+      $("#tlBody").innerHTML = `<div class="empty">Your journey is being saved on this phone${NATIVE ? ` (${NATIVE.pointCount()} points waiting)` : ""}.<br>Connect to the internet to upload it and see your days.</div>` +
+        Object.keys(byDay).map(d => `<div class="dayrow"><div><b>${d}</b><small>📷 ${byDay[d].length} photo(s)</small></div></div>${photoStrip(byDay[d])}`).join("");
+      wireStrip($("#tlBody")); return;
+    }
     await sync();
     try {
       const j = await apiJSON("/timeline/days");
-      $("#tlBody").innerHTML = `<p><b>${j.total_km} km</b> in ${j.days.length} day(s)</p>` + (j.days.map(d => `<div class="dayrow" data-day="${d.day}"><div><b>${d.day}</b><small>${d.from} – ${d.to}</small></div><b>${d.km} km</b></div>`).join("") || `<div class="empty">Nothing recorded yet. Turn on “Record my journey” in the menu.</div>`);
+      const days = j.days.slice(); Object.keys(byDay).forEach(d => { if (!days.some(x => x.day === d)) days.push({day: d, from: "", to: "", km: 0}); }); days.sort((a, b) => b.day.localeCompare(a.day));
+      $("#tlBody").innerHTML = `<p><b>${j.total_km} km</b> in ${j.days.length} day(s)${LOCAL_PHOTOS.length ? ` · 📷 ${LOCAL_PHOTOS.length} photo(s)` : ""}</p>` + (days.map(d => `<div class="dayrow" data-day="${d.day}"><div><b>${d.day}</b><small>${d.from ? d.from + " – " + d.to : ""}${byDay[d.day] ? ` · 📷 ${byDay[d.day].length}` : ""}</small></div><b>${d.km} km</b></div>${photoStrip(byDay[d.day] || [])}`).join("") || `<div class="empty">Nothing recorded yet. Turn on “Record my journey” in the menu.</div>`);
       $$("#tlBody .dayrow").forEach(r => r.onclick = async () => {
         $$("#tlBody .dayrow").forEach(x => x.classList.toggle("on", x === r));
         const t = await apiJSON("/timeline?day=" + r.dataset.day);
         layers.track.clearLayers();
-        if (t.points.length) { const line = L.polyline(t.points.map(p => [p[0], p[1]]), {color: "#1a73e8", weight: 5}).addTo(layers.track); map.fitBounds(line.getBounds(), {padding: [40, 40]}); setSheet("min"); }
+        const pts = t.points.map(p => [p[0], p[1]]).concat((byDay[r.dataset.day] || []).filter(x => x.lat != null).map(x => [x.lat, x.lng]));
+        if (t.points.length) L.polyline(t.points.map(p => [p[0], p[1]]), {color: "#1a73e8", weight: 5}).addTo(layers.track);
+        if (pts.length) { map.fitBounds(pts, {padding: [40, 40], maxZoom: 16}); if (map.getZoom() < PHOTO_ZOOM && byDay[r.dataset.day]) map.setZoom(PHOTO_ZOOM); setSheet("min"); }
       });
+      wireStrip($("#tlBody"));
     } catch (e) { $("#tlBody").innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   }
 
@@ -572,6 +591,8 @@
           if (!r.ok) break; NATIVE.clearPoints(Math.max(...pts.map(p => p.ts)));
         }
       }
+      // 2b. public camera photos
+      await uploadPhotos().catch(() => {});
       // 3. presence (online pilgrims) + fresh data
       await api("/presence", {method: "POST", body: form(lastFix ? {lat: lastFix.lat, lng: lastFix.lng, accuracy: lastFix.acc} : {})});
       const cachedStops = store.get("stops", null);
@@ -597,6 +618,191 @@
     $("#onlineList").innerHTML = list.map(u => `<div class="ou" data-lat="${u.lat ?? ""}" data-lng="${u.lng ?? ""}"><div class="av" style="background:${hue(u.u)}">${esc(u.u[0].toUpperCase())}</div><div><b>@${esc(u.u)}</b>${u.me ? " <small>(you)</small>" : ""}<br><small>${u.live ? "🔴 " : ""}${agoText(u)}${u.live ? " · live location" : ""}</small></div></div>`).join("") || `<div class="empty">No one else online.</div>`;
   }
 
+
+  // ================================================================ camera: geotagged, time-stamped photos
+  // Every photo is stamped (place, GPS, phone date/time, @user), kept on this phone and saved to the gallery.
+  // Public ones are also sent to the server and appear on everyone's map when zoomed in; private ones never leave the phone.
+  const PHOTO_ZOOM = 12;
+  let LOCAL_PHOTOS = [], SERVER_PHOTOS = store.get("photosCache", []), thumbURLs = {};
+  const blobURL = (id, blob) => thumbURLs[id] || (thumbURLs[id] = URL.createObjectURL(blob));
+  const dayOf = ts => new Date(ts).toLocaleDateString("en-CA");          // YYYY-MM-DD in the phone's time zone
+  function nearestStop(lat, lng) {
+    let best = null, bd = 1e9;
+    placed.forEach(o => { const d = km([lat, lng], [o.lat, o.lng]); if (d < bd) { bd = d; best = o; } });
+    return best && bd < 25 ? {name: best.v, km: bd} : null;
+  }
+  function fixForPhoto() {
+    if (lastFix && Date.now() - lastFix.t < 120000) return Promise.resolve(lastFix);
+    return new Promise(res => {
+      if (!navigator.geolocation) return res(lastFix);
+      navigator.geolocation.getCurrentPosition(p => { setMyPos(p); res(lastFix); }, () => res(lastFix && Date.now() - lastFix.t < 900000 ? lastFix : null),
+        {enableHighAccuracy: true, timeout: 12000, maximumAge: 60000});
+    });
+  }
+  const loadImg = src => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+  const toBlob = (cv, q) => new Promise(res => cv.toBlob(res, "image/jpeg", q));
+  const toDataURL = blob => new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(blob); });
+
+  async function stampPhoto(file, fix, ts) {
+    const url = URL.createObjectURL(file), img = await loadImg(url); URL.revokeObjectURL(url);
+    const k = Math.min(1, 2048 / Math.max(img.naturalWidth, img.naturalHeight));
+    const w = Math.round(img.naturalWidth * k), h = Math.round(img.naturalHeight * k);
+    const cv = document.createElement("canvas"); cv.width = w; cv.height = h; const g = cv.getContext("2d");
+    g.drawImage(img, 0, 0, w, h);
+    // the stamp strip on the lower part
+    const fs = Math.max(14, Math.round(Math.min(w, h) * 0.034)), pad = Math.round(fs * 0.7), lh = Math.round(fs * 1.35);
+    const near = fix ? nearestStop(fix.lat, fix.lng) : null;
+    const d = new Date(ts);
+    const when = d.toLocaleString("en-IN", {day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true, timeZoneName: "short"});
+    const lines = [
+      {t: near ? `📍 Near ${near.name}${near.km >= 0.5 ? ` (${near.km.toFixed(1)} km)` : ""}` : "📍 Narmada Parikrama", b: true},
+      {t: fix ? `${Math.abs(fix.lat).toFixed(6)}°${fix.lat >= 0 ? "N" : "S"}, ${Math.abs(fix.lng).toFixed(6)}°${fix.lng >= 0 ? "E" : "W"}${fix.acc ? `  ±${Math.round(fix.acc)} m` : ""}` : "GPS location not available"},
+      {t: `🕒 ${when}`},
+      {t: `@${(ME && ME.username) || "pilgrim"} · Narmada Parikrama`, s: true},
+    ];
+    const bh = pad * 2 + lh * lines.length;
+    const grad = g.createLinearGradient(0, h - bh - pad * 2, 0, h);
+    grad.addColorStop(0, "rgba(0,0,0,0)"); grad.addColorStop(0.25, "rgba(0,0,0,.55)"); grad.addColorStop(1, "rgba(0,0,0,.72)");
+    g.fillStyle = grad; g.fillRect(0, h - bh - pad * 2, w, bh + pad * 2);
+    g.textBaseline = "top"; g.shadowColor = "rgba(0,0,0,.6)"; g.shadowBlur = 3;
+    lines.forEach((l, i) => {
+      g.font = `${l.b ? "700 " : ""}${l.s ? Math.round(fs * 0.8) : fs}px Roboto, "Noto Sans", sans-serif`;
+      g.fillStyle = l.s ? "rgba(255,255,255,.8)" : "#fff";
+      g.fillText(l.t, pad, h - bh + pad + i * lh, w - pad * 2);
+    });
+    const blob = await toBlob(cv, 0.88);
+    // square thumbnail for the map
+    const s = Math.min(w, h), tc = document.createElement("canvas"); tc.width = tc.height = 240;
+    tc.getContext("2d").drawImage(cv, (w - s) / 2, Math.max(0, (h - s) / 2 - bh / 2), s, s, 0, 0, 240, 240);
+    return {blob, thumb: await toBlob(tc, 0.8), near: near ? near.name : "", w, h};
+  }
+
+  async function takePhoto(file) {
+    toast("Adding place and time…");
+    const ts = Date.now(), fix = await fixForPhoto();
+    let shot; try { shot = await stampPhoto(file, fix, ts); } catch (e) { return toast("Could not read the photo."); }
+    const url = URL.createObjectURL(shot.blob), canPublic = !!fix, pub = canPublic && store.get("photoPublic", false);
+    $("#photoView").innerHTML = `<div class="dhead">${backBtn("Cancel")}<h2 style="font-size:20px">📷 New photo</h2>
+        <div class="sub">${fix ? `±${Math.round(fix.acc || 0)} m · ${esc(shot.near || "on the parikrama")}` : "⚠ No GPS fix – the photo is saved but can't go on the map"}</div></div>
+      <div class="dbody"><img class="phprev" src="${url}" alt="Your photo with place and time">
+        <label class="lbl2" for="phCap">Caption (optional)</label><input id="phCap" maxlength="300" placeholder="e.g. Morning aarti at the ghat">
+        <div class="mrow"><span class="mi">🌍</span><div><b>Public</b><small id="phWho">${pub ? "Everyone sees it on the map when they zoom in here" : "Only you – stays on this phone"}</small></div>
+          <button class="toggle${pub ? " on" : ""}" id="phPub" ${canPublic ? "" : "disabled"} aria-label="Make photo public"></button></div>
+        <div class="actions"><button class="btn2" id="phSave">Save photo</button><button class="btn2 alt" id="phRetake">Retake</button></div>
+        <p class="hintline">Saved to your gallery (Pictures › Narmada Parikrama) and your timeline.</p></div>`;
+    show("photoView"); setSheet("full");
+    $("#phPub").onclick = () => { const on = !$("#phPub").classList.contains("on"); $("#phPub").classList.toggle("on", on); store.set("photoPublic", on);
+      $("#phWho").textContent = on ? "Everyone sees it on the map when they zoom in here" : "Only you – stays on this phone"; };
+    $("#phRetake").onclick = () => { URL.revokeObjectURL(url); back(); openCamera(); };
+    $("#phSave").onclick = async () => {
+      $("#phSave").disabled = true;
+      const rec = {id: "p" + ts + "_" + Math.random().toString(36).slice(2, 8), ts, lat: fix ? fix.lat : null, lng: fix ? fix.lng : null, acc: fix ? fix.acc : null,
+        near: shot.near, caption: $("#phCap").value.trim(), public: $("#phPub").classList.contains("on"), uploaded: false, serverId: null, blob: shot.blob, thumb: shot.thumb};
+      await photoPut(rec);
+      const d = new Date(ts), p2 = n => String(n).padStart(2, "0");
+      const name = `Narmada_${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}_${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}.jpg`;
+      let inGallery = false;
+      if (NATIVE && NATIVE.saveToGallery) inGallery = NATIVE.saveToGallery(await toDataURL(shot.blob), name);
+      URL.revokeObjectURL(url);
+      toast(rec.public ? (online() ? "Saved ✓ Sharing on the map…" : "Saved ✓ It goes on the map when you're online") : `Saved ✓ ${inGallery ? "in your gallery – " : ""}only you can see it`);
+      back(); setSheet("min"); await loadLocalPhotos(); if (rec.lat != null) map.setView([rec.lat, rec.lng], Math.max(map.getZoom(), 15));
+      if (rec.public) sync();
+    };
+  }
+  function openCamera() { const i = $("#camIn"); i.value = ""; fixForPhoto(); i.click(); }
+
+  async function uploadPhotos() {
+    for (const rec of await photoAll()) {
+      if (!rec.public || rec.uploaded || rec.lat == null) continue;
+      const fd = form({lat: rec.lat, lng: rec.lng, acc: rec.acc, ts: rec.ts / 1000, caption: rec.caption, near: rec.near, client_id: rec.id});
+      fd.append("photo", rec.blob, rec.id + ".jpg");
+      const r = await api("/photos", {method: "POST", body: fd, timeout: 120000});
+      const j = await r.json().catch(() => ({}));
+      if (r.ok) { rec.uploaded = true; rec.serverId = j.photo.id; await photoPut(rec); toast("Photo shared on the map 🌍"); }
+      else if (r.status >= 400 && r.status < 500) { rec.public = false; await photoPut(rec); toast("Photo kept private: " + (j.error || r.status)); }
+      else break;
+    }
+  }
+
+  // ---------------------------------------------------------------- photos on the map (zoomed in, like Google Maps)
+  async function loadLocalPhotos() { try { LOCAL_PHOTOS = await photoAll(); } catch (e) { LOCAL_PHOTOS = []; } drawPhotos(); }
+  let photoTimer = null;
+  function fetchAreaPhotos() {
+    clearTimeout(photoTimer);
+    photoTimer = setTimeout(async () => {
+      if (!map || map.getZoom() < PHOTO_ZOOM || !online() || !TOKEN) return drawPhotos();
+      const b = map.getBounds().pad(0.3);
+      try {
+        const j = await apiJSON(`/photos?bbox=${[b.getSouth(), b.getWest(), b.getNorth(), b.getEast()].map(x => x.toFixed(4)).join(",")}`);
+        const have = new Set(SERVER_PHOTOS.map(x => x.id));
+        SERVER_PHOTOS = SERVER_PHOTOS.concat(j.photos.filter(x => !have.has(x.id))).slice(-600);
+        store.set("photosCache", SERVER_PHOTOS);
+      } catch (e) { /* offline: use the cache */ }
+      drawPhotos();
+    }, 400);
+  }
+  const absURL = u => /^https?:/.test(u) ? u : SERVER.replace(/\/$/, "") + u;
+  function allPhotos() {
+    const mine = new Set(LOCAL_PHOTOS.map(r => r.id));
+    const local = LOCAL_PHOTOS.filter(r => r.lat != null).map(r => ({local: r, id: r.id, lat: r.lat, lng: r.lng, ts: r.ts, thumb: blobURL(r.id + "t", r.thumb),
+      u: ME && ME.username, mine: true, priv: !r.public, near: r.near, caption: r.caption}));
+    const srv = SERVER_PHOTOS.filter(x => !(x.mine && mine.has(x.client_id))).map(x => ({srv: x, id: "s" + x.id, lat: x.lat, lng: x.lng, ts: x.ts * 1000,
+      thumb: absURL(x.thumb), u: x.u, mine: x.mine, near: x.near, caption: x.caption}));
+    return local.concat(srv);
+  }
+  function drawPhotos() {
+    if (!map) return; layers.photos.clearLayers();
+    if (map.getZoom() < PHOTO_ZOOM) return;
+    const b = map.getBounds().pad(0.2);
+    allPhotos().filter(p => b.contains([p.lat, p.lng])).forEach(p => {
+      L.marker([p.lat, p.lng], {icon: L.divIcon({className: "", iconSize: [46, 46], iconAnchor: [23, 46],
+        html: `<div class="phmark${p.priv ? " priv" : ""}"><img src="${esc(p.thumb)}" alt="" loading="lazy">${p.priv ? "<span>🔒</span>" : ""}</div>`}), zIndexOffset: 300})
+        .on("click", () => openViewer(p)).addTo(layers.photos);
+    });
+  }
+
+  // ---------------------------------------------------------------- full-screen viewer
+  function openViewer(p) {
+    const r = p.local, s = p.srv, v = $("#pviewer");
+    const src = r ? blobURL(r.id + "f", r.blob) : absURL(s.full);
+    const when = new Date(p.ts).toLocaleString("en-IN", {day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit"});
+    const status = r ? (r.public ? (r.uploaded ? "🌍 Public" : "🌍 Public · waiting for internet") : "🔒 Only you (on this phone)") : "🌍 Public";
+    v.innerHTML = `<div class="pvtop"><button class="pvbtn" id="pvClose" aria-label="Close">✕</button><div><b>@${esc(p.u || "")}</b><small>${esc(when)}${p.near ? " · near " + esc(p.near) : ""}</small></div></div>
+      <img class="pvimg" src="${esc(src)}" alt="Photo by @${esc(p.u || "")}">
+      <div class="pvbar">${p.caption ? `<p>${esc(p.caption)}</p>` : ""}<small>${status}</small>
+        <div class="pvact">
+          ${p.lat != null ? `<button class="btn2 alt" id="pvMap">Show on map</button>` : ""}
+          ${r && !r.public && r.lat != null ? `<button class="btn2 alt" id="pvPub">Make public</button>` : ""}
+          ${r && r.public ? `<button class="btn2 alt" id="pvPriv">Make private</button>` : ""}
+          ${r || (s && s.can_delete) ? `<button class="btn2 alt danger" id="pvDel">Delete</button>` : ""}
+        </div></div>`;
+    v.hidden = false;
+    const close = () => { v.hidden = true; v.innerHTML = ""; };
+    $("#pvClose").onclick = close;
+    if ($("#pvMap")) $("#pvMap").onclick = () => { close(); map.setView([p.lat, p.lng], 17); setSheet("min"); };
+    if ($("#pvPub")) $("#pvPub").onclick = async () => { r.public = true; await photoPut(r); close(); toast(online() ? "Sharing…" : "It will be shared when you're online"); await loadLocalPhotos(); sync(); };
+    if ($("#pvPriv")) $("#pvPriv").onclick = async () => {
+      if (r.uploaded && r.serverId) { if (!online()) return toast("Needs internet to remove it from the server.");
+        const x = await api(`/photos/${r.serverId}/delete`, {method: "POST"}); if (!x.ok && x.status !== 404) return toast("Could not remove it from the server."); }
+      SERVER_PHOTOS = SERVER_PHOTOS.filter(q => !(q.mine && q.client_id === r.id)); store.set("photosCache", SERVER_PHOTOS);
+      r.public = false; r.uploaded = false; r.serverId = null; await photoPut(r); close(); toast("Now private – only on this phone 🔒"); loadLocalPhotos(); };
+    if ($("#pvDel")) $("#pvDel").onclick = async () => {
+      const yes = $("#pvDel").dataset.sure; if (!yes) { $("#pvDel").dataset.sure = 1; $("#pvDel").textContent = "Tap again to delete"; return; }
+      const sid = r ? (r.uploaded && r.serverId) : s.id;
+      if (sid) { if (!online()) return toast("Needs internet to remove it from the server.");
+        const x = await api(`/photos/${sid}/delete`, {method: "POST"}); if (!x.ok && x.status !== 404) return toast("Could not delete on the server."); }
+      if (r) await photoDel(r.id);
+      SERVER_PHOTOS = SERVER_PHOTOS.filter(q => q.id !== sid); store.set("photosCache", SERVER_PHOTOS);
+      close(); toast(r ? "Deleted from the app (the gallery copy stays)" : "Photo removed"); loadLocalPhotos(); };
+  }
+  function photoStrip(list) {
+    return list.length ? `<div class="phstrip">${list.map(r => `<img src="${blobURL(r.id + "t", r.thumb)}" data-ph="${r.id}" alt="Photo${r.near ? " near " + esc(r.near) : ""}">`).join("")}</div>` : "";
+  }
+  function wireStrip(box) {
+    box.querySelectorAll("[data-ph]").forEach(i => i.onclick = () => { const p = allPhotos().find(x => x.id === i.dataset.ph);
+      const r = LOCAL_PHOTOS.find(x => x.id === i.dataset.ph);
+      openViewer(p || {local: r, id: r.id, ts: r.ts, u: ME && ME.username, mine: true, near: r.near, caption: r.caption, lat: r.lat, lng: r.lng}); });
+  }
 
   // ================================================================ yatra paths (shared GPS tracks)
   let PATHS = [];
@@ -665,6 +871,8 @@
     $("#zIn").onclick = () => map.zoomIn(); $("#zOut").onclick = () => map.zoomOut();
     $("#fitBtn").onclick = () => { layers.road.clearLayers(); layers.pin.clearLayers(); layers.track.clearLayers(); if (placed.length) map.fitBounds(placed.map(o => [o.lat, o.lng]), {padding: [40, 40]}); };
     $("#avatarBtn").onclick = openMenu;
+    $("#camBtn").onclick = openCamera;
+    $("#camIn").onchange = () => { const f = $("#camIn").files[0]; if (f) takePhoto(f); };
     window.addEventListener("online", () => { updateNetbar(); sync(); });
     window.addEventListener("offline", updateNetbar);
   }
@@ -681,7 +889,7 @@
     $("#auth").hidden = true; $("#appRoot").hidden = false;
     $("#avatarBtn").textContent = ((ME && ME.username) || "?")[0].toUpperCase();
     if (!started) {
-      started = true; initMap(); wireControls(); drawReports(); renderPaths();
+      started = true; initMap(); wireControls(); drawReports(); renderPaths(); loadLocalPhotos();
       if (placed.length) map.fitBounds(placed.map(o => [o.lat, o.lng]), {padding: [40, 40]});
       if (navigator.geolocation) navigator.geolocation.watchPosition(setMyPos, () => {}, {enableHighAccuracy: true, maximumAge: 30000});
       if (NATIVE && store.get("recording", true) && !NATIVE.isTracking()) store.set("recording", NATIVE.startTracking());

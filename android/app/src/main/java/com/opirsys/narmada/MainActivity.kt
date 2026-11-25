@@ -4,6 +4,7 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.DownloadManager
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -11,6 +12,8 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.provider.MediaStore
+import android.util.Base64
 import android.webkit.GeolocationPermissions
 import android.webkit.JavascriptInterface
 import android.webkit.ValueCallback
@@ -21,6 +24,7 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.webkit.WebViewAssetLoader
 import org.json.JSONObject
 import java.io.ByteArrayInputStream
@@ -32,11 +36,13 @@ import java.io.RandomAccessFile
  *  - serves the downloaded offline map file with HTTP Range support (/offline/narmada.pmtiles)
  *  - records the journey in a foreground service (works offline and with the screen off)
  *  - photo / video picker for updates, and downloading the offline map from the server
+ *  - opens the camera directly for <input capture>, and saves stamped photos to the gallery
  */
 class MainActivity : Activity() {
 
     private lateinit var web: WebView
     private var fileCallback: ValueCallback<Array<Uri>>? = null
+    private var cameraUri: Uri? = null
     private var geoCallback: Pair<String, GeolocationPermissions.Callback>? = null
 
     private val assetLoader by lazy {
@@ -96,6 +102,21 @@ class MainActivity : Activity() {
             override fun onShowFileChooser(view: WebView, cb: ValueCallback<Array<Uri>>, params: FileChooserParams): Boolean {
                 fileCallback?.onReceiveValue(null)
                 fileCallback = cb
+                cameraUri = null
+                val wantsImage = params.acceptTypes.any { it.isBlank() || it.startsWith("image") }
+                if (params.isCaptureEnabled && wantsImage) {
+                    // straight to the camera; the photo is written to our cache and handed to the page
+                    val dir = File(cacheDir, "camera").apply { mkdirs() }
+                    dir.listFiles()?.filter { System.currentTimeMillis() - it.lastModified() > 86400000 }?.forEach { it.delete() }
+                    val f = File(dir, "cam_${System.currentTimeMillis()}.jpg")
+                    val uri = FileProvider.getUriForFile(this@MainActivity, "$packageName.files", f)
+                    val cam = Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
+                        putExtra(MediaStore.EXTRA_OUTPUT, uri)
+                        addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    try { cameraUri = uri; startActivityForResult(cam, REQ_FILE); return true }
+                    catch (e: Exception) { cameraUri = null /* no camera app: fall back to the picker */ }
+                }
                 val intent = params.createIntent().apply {
                     if (params.mode == FileChooserParams.MODE_OPEN_MULTIPLE) putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
                 }
@@ -160,6 +181,8 @@ class MainActivity : Activity() {
         if (requestCode != REQ_FILE) return
         val cb = fileCallback ?: return
         fileCallback = null
+        val cam = cameraUri; cameraUri = null
+        if (cam != null) { cb.onReceiveValue(if (resultCode == RESULT_OK) arrayOf(cam) else null); return }
         if (resultCode != RESULT_OK || data == null) { cb.onReceiveValue(null); return }
         val uris = mutableListOf<Uri>()
         data.clipData?.let { cd -> for (i in 0 until cd.itemCount) uris += cd.getItemAt(i).uri }
@@ -243,6 +266,25 @@ class MainActivity : Activity() {
         }
 
         @JavascriptInterface fun freeSpaceBytes(): Long = mapDir().usableSpace
+
+        /** Save a stamped JPEG (base64) to the phone's gallery: Pictures/Narmada Parikrama. */
+        @JavascriptInterface fun saveToGallery(b64: String, name: String): Boolean = try {
+            val bytes = Base64.decode(b64.substringAfter(","), Base64.DEFAULT)
+            val safe = name.replace(Regex("[^A-Za-z0-9_.-]"), "_")
+            if (Build.VERSION.SDK_INT >= 29) {
+                val v = ContentValues().apply {
+                    put(MediaStore.Images.Media.DISPLAY_NAME, safe)
+                    put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+                    put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/Narmada Parikrama")
+                }
+                val uri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, v)!!
+                contentResolver.openOutputStream(uri)!!.use { it.write(bytes) }
+            } else {   // older Android: the app's own Pictures folder (no storage permission needed)
+                val dir = File(getExternalFilesDir(Environment.DIRECTORY_PICTURES), "Narmada Parikrama").apply { mkdirs() }
+                File(dir, safe).writeBytes(bytes)
+            }
+            true
+        } catch (e: Exception) { false }
 
         @JavascriptInterface fun openExternal(url: String) {
             runOnUiThread { runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } }

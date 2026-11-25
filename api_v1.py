@@ -21,6 +21,9 @@ Endpoints
   POST /presence               lat, lng, accuracy (optional) – "I'm online"
   GET  /online                 online pilgrims (rounded positions)
   GET  /paths                  yatra paths of pilgrims who share them (+ my own)
+  POST /photos                 public geotagged photo: photo, lat, lng, acc, ts, caption, near, client_id
+  GET  /photos                 ?bbox=s,w,n,e  public photos in an area · ?mine=1[&day=YYYY-MM-DD]
+  POST /photos/<id>/delete     owner or admin
   POST /timeline/points        JSON {"points":[{lat,lng,acc,ts}, ...]} recorded offline
   GET  /timeline/days          my days
   GET  /timeline?day=YYYY-MM-DD|all
@@ -231,6 +234,20 @@ def create_blueprint(core):
     @bp.get("/online")
     def online():
         return core.api_online()
+
+    @bp.post("/photos")
+    def photo_upload():
+        code, payload = core.save_geo_photo(g.user, request.form, request.files.get("photo"))
+        return jsonify(payload), code
+
+    @bp.get("/photos")
+    def photo_list():
+        return jsonify(core.list_geo_photos(g.user, request.args))
+
+    @bp.post("/photos/<int:photo_id>/delete")
+    def photo_delete(photo_id):
+        code, payload = core.delete_geo_photo(g.user, photo_id)
+        return jsonify(payload), code
 
     @bp.get("/paths")
     def paths():

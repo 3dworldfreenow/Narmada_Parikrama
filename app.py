@@ -163,6 +163,19 @@ CREATE TABLE IF NOT EXISTS path_reports (
     reviewed_by INTEGER, reviewed_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_reports_status ON path_reports(status);
+CREATE TABLE IF NOT EXISTS geo_photos (           -- geotagged camera photos the owner made public
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    client_id TEXT,                             -- id made by the phone, so a re-sent photo is not duplicated
+    file_key TEXT NOT NULL,                     -- files: UPLOAD_DIR/geo/<key>_f.jpg and <key>_t.jpg
+    lat REAL NOT NULL, lng REAL NOT NULL, acc REAL,
+    taken_ts REAL NOT NULL,                     -- the phone's date/time when the photo was taken
+    caption TEXT, near TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_geo_client ON geo_photos(user_id, client_id);
+CREATE INDEX IF NOT EXISTS idx_geo_pos ON geo_photos(lat, lng);
+
 CREATE TABLE IF NOT EXISTS location_points (      -- each user's private journey ("timeline")
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL REFERENCES users(id),
@@ -401,7 +414,7 @@ def check_csrf():
 
 
 # Pages anyone may open without logging in / sharing location.
-OPEN_ENDPOINTS = {"login", "register", "static", "logout", "choose_username", "locate", "api_location"}
+OPEN_ENDPOINTS = {"login", "register", "static", "logout", "choose_username", "locate", "api_location", "geo_photo_file"}
 
 
 @app.before_request
@@ -930,6 +943,113 @@ def api_online():
             "ago": int((datetime.now(timezone.utc).timestamp() - r["last_seen_ts"]) // 60),
         })
     return {"online": out, "minutes": ONLINE_MINUTES}
+
+
+# ---------------------------------------------------------------- geotagged camera photos
+GEO_DIR = os.path.join(UPLOAD_DIR, "geo")
+GEO_KEY_RE = re.compile(r"^[a-f0-9]{32}_[ft]\.jpg$")
+
+
+def geo_photo_json(r, me_id=None, is_admin=False):
+    return {"id": r["id"], "u": r["username"], "lat": r["lat"], "lng": r["lng"], "acc": r["acc"], "ts": r["taken_ts"],
+            "when": datetime.fromtimestamp(r["taken_ts"], IST).strftime("%d %b %Y, %I:%M %p"),
+            "caption": r["caption"] or "", "near": r["near"] or "", "client_id": r["client_id"],
+            "thumb": url_for("geo_photo_file", name=r["file_key"] + "_t.jpg"),
+            "full": url_for("geo_photo_file", name=r["file_key"] + "_f.jpg"),
+            "mine": r["user_id"] == me_id, "can_delete": r["user_id"] == me_id or is_admin}
+
+
+def save_geo_photo(user, form, fs):
+    """Store a public photo from the app. The phone has already stamped place + time on it."""
+    lat, lng = parse_float(form.get("lat"), -90, 90), parse_float(form.get("lng"), -180, 180)
+    nowts = datetime.now(timezone.utc).timestamp()
+    ts = parse_float(form.get("ts"), nowts - 400 * 86400, nowts + 3600) or nowts
+    if lat is None or lng is None:
+        return 400, {"error": "This photo has no location, so it can't go on the map."}
+    if not fs or not fs.filename:
+        return 400, {"error": "No photo."}
+    head = fs.stream.read(16); fs.stream.seek(0)
+    if not looks_like_image(head):
+        return 400, {"error": "That file is not a photo."}
+    cid = (form.get("client_id") or "")[:64] or None
+    db = get_db()
+    if cid:
+        old = db.execute("SELECT g.*, u.username FROM geo_photos g JOIN users u ON u.id=g.user_id WHERE g.user_id=? AND g.client_id=?",
+                         (user["id"], cid)).fetchone()
+        if old:
+            return 200, {"ok": True, "photo": geo_photo_json(old, user["id"]), "duplicate": True}
+    from PIL import Image, ImageOps
+    try:
+        img = ImageOps.exif_transpose(Image.open(fs.stream)).convert("RGB")
+    except Exception:
+        return 400, {"error": "Could not read that photo."}
+    os.makedirs(GEO_DIR, exist_ok=True)
+    key = uuid.uuid4().hex
+    full = img.copy(); full.thumbnail((2048, 2048)); full.save(os.path.join(GEO_DIR, key + "_f.jpg"), "JPEG", quality=85)
+    w, h = img.size; s = min(w, h)
+    th = img.crop(((w - s) // 2, (h - s) // 2, (w - s) // 2 + s, (h - s) // 2 + s)); th.thumbnail((240, 240))
+    th.save(os.path.join(GEO_DIR, key + "_t.jpg"), "JPEG", quality=80)
+    cur = db.execute("""INSERT INTO geo_photos (user_id, client_id, file_key, lat, lng, acc, taken_ts, caption, near, created_at)
+                        VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                     (user["id"], cid, key, lat, lng, parse_float(form.get("acc"), 0, 1e6), ts,
+                      (form.get("caption") or "").strip()[:300], (form.get("near") or "").strip()[:120], now()))
+    db.commit()
+    r = db.execute("SELECT g.*, u.username FROM geo_photos g JOIN users u ON u.id=g.user_id WHERE g.id=?", (cur.lastrowid,)).fetchone()
+    return 200, {"ok": True, "photo": geo_photo_json(r, user["id"])}
+
+
+def list_geo_photos(user, args):
+    """Public photos in a map area (?bbox=south,west,north,east), or mine (?mine=1, optional &day=YYYY-MM-DD)."""
+    where, vals = [], []
+    if args.get("mine"):
+        where.append("g.user_id=?"); vals.append(user["id"])
+        if args.get("day"):
+            try:
+                a, b = _day_bounds(args["day"]); where.append("g.taken_ts>=? AND g.taken_ts<?"); vals += [a, b]
+            except ValueError:
+                pass
+    bb = [parse_float(x, -180, 180) for x in (args.get("bbox") or "").split(",")] if args.get("bbox") else []
+    if len(bb) == 4 and None not in bb:
+        where.append("g.lat BETWEEN ? AND ? AND g.lng BETWEEN ? AND ?"); vals += [bb[0], bb[2], bb[1], bb[3]]
+    lim = min(int(parse_float(args.get("limit"), 1, 500) or 300), 500)
+    rows = get_db().execute(f"""SELECT g.*, u.username FROM geo_photos g JOIN users u ON u.id=g.user_id
+                                {"WHERE " + " AND ".join(where) if where else ""} ORDER BY g.taken_ts DESC LIMIT ?""",
+                            vals + [lim]).fetchall()
+    adm = user["role"] == "admin"
+    return {"photos": [geo_photo_json(r, user["id"], adm) for r in rows]}
+
+
+def delete_geo_photo(user, photo_id):
+    db = get_db()
+    r = db.execute("SELECT * FROM geo_photos WHERE id=?", (photo_id,)).fetchone()
+    if not r:
+        return 404, {"error": "Photo not found."}
+    if r["user_id"] != user["id"] and user["role"] != "admin":
+        return 403, {"error": "Only the owner or an admin can remove this photo."}
+    for s in ("_f.jpg", "_t.jpg"):
+        try: os.remove(os.path.join(GEO_DIR, r["file_key"] + s))
+        except OSError: pass
+    db.execute("DELETE FROM geo_photos WHERE id=?", (photo_id,)); db.commit()
+    return 200, {"ok": True}
+
+
+@app.route("/gp/<name>")
+def geo_photo_file(name):
+    """Public photo files. Names are long random keys, so only people shown the photo can find it."""
+    if not GEO_KEY_RE.match(name):
+        abort(404)
+    return send_from_directory(GEO_DIR, name, max_age=30 * 86400)
+
+
+@app.route("/api/photos")
+def api_photos():
+    return list_geo_photos(current_user(), request.args)
+
+
+@app.route("/api/photos/<int:photo_id>/delete", methods=["POST"])
+def api_photo_delete(photo_id):
+    code, payload = delete_geo_photo(current_user(), photo_id)
+    return payload, code
 
 
 def public_paths(me_id):
