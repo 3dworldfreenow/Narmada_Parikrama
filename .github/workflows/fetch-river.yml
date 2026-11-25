@@ -1,0 +1,27 @@
+name: Fetch Narmada river line
+
+on:
+  push:
+    branches: [main]
+    paths: ["tools/fetch_river.py", ".github/workflows/fetch-river.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download the river from OpenStreetMap
+        run: python3 tools/fetch_river.py
+      - name: Save it in the repository
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/narmada_river.json
+          git diff --cached --quiet && { echo "No change."; exit 0; }
+          git commit -m "Update Narmada river line from OpenStreetMap"
+          git pull --rebase
+          git push
