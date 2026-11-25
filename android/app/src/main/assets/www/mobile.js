@@ -511,7 +511,7 @@
     if (!online()) return toast("Connect to the internet (Wi-Fi is best) to download the map.");
     try {
       const info = await apiJSON("/map");
-      if (!info.available) return toast("The server has no offline map yet. Ask the admin to run download-map.sh.");
+      if (!info.available) return toast("The server has no offline map yet. Ask the admin to download it (Admin → Offline map on the website).");
       if (NATIVE.freeSpaceBytes() < info.bytes * 1.2) return toast(`Not enough space: the map needs ${fmtMB(info.bytes)}.`);
       store.set("mapMaxZoom", info.maxzoom);
       NATIVE.downloadMap(SERVER.replace(/\/$/, "") + info.url, TOKEN);
