@@ -94,7 +94,7 @@
   function logout(expired) {
     if (!expired && TOKEN && online()) api("/auth/logout", {method: "POST"}).catch(() => {});
     TOKEN = null; ME = null; store.del("token"); store.del("me");
-    if (NATIVE) NATIVE.stopTracking();
+    if (NATIVE) { if (NATIVE.setAuth) NATIVE.setAuth("", "", false); NATIVE.stopTracking(); }
     showAuth(); if (expired) $("#authErr").textContent = "Your login expired. Please log in again.";
   }
 
@@ -479,8 +479,9 @@
         <div class="mrow"><span class="mi">🕒</span><div><b>Record my journey</b><small>Saves your route for “My timeline”, also offline and with the screen off</small></div><button class="toggle${rec ? " on" : ""}" id="recT" aria-label="Record my journey"></button></div>
         <div class="mrow" id="tlOpen" style="cursor:pointer"><span class="mi">📅</span><div><b>My timeline</b><small>Your days, distance and stops passed${NATIVE && NATIVE.pointCount() ? ` · ${NATIVE.pointCount()} points waiting to upload` : ""}</small></div><span>›</span></div>
         <div class="mrow"><span class="mi">👁</span><div><b>Show me to other pilgrims</b><small>Username and approximate area only</small></div><button class="toggle${ME && ME.show_on_map ? " on" : ""}" id="showT"></button></div>
-        <div class="mrow"><span class="mi">🔴</span><div><b>Share my live location</b><small>Other pilgrims see exactly where you are (every ~20 s) while you're online</small></div><button class="toggle${ME && ME.share_live ? " on" : ""}" id="liveT" aria-label="Share my live location"></button></div>
+        <div class="mrow"><span class="mi">🔴</span><div><b>Share my live location</b><small>Other pilgrims see exactly where you are (every ~20 s), also while you use other apps</small></div><button class="toggle${ME && ME.share_live ? " on" : ""}" id="liveT" aria-label="Share my live location"></button></div>
         <div class="mrow"><span class="mi">🚶</span><div><b>Share my yatra path publicly</b><small>Everyone sees the route you walked (from “Record my journey”) with your username</small></div><button class="toggle${ME && ME.share_path ? " on" : ""}" id="shareT" aria-label="Share my yatra path"></button></div>
+        ${NATIVE && NATIVE.ignoresBatteryLimits ? `<div class="mrow"><span class="mi">🔋</span><div><b>Work in the background</b><small>${NATIVE.ignoresBatteryLimits() ? "On ✓ – GPS keeps working while you use other apps" : "Some phones stop GPS apps to save battery. Allow this app to run in the background."}</small></div>${NATIVE.ignoresBatteryLimits() ? "" : `<button class="btn2 alt" id="batBtn">Allow</button>`}</div>` : ""}
         <div class="mrow"><span class="mi">🔄</span><div><b>Sync now</b><small id="syncState">${store.get("lastSync", null) ? "Last synced " + new Date(store.get("lastSync")).toLocaleString("en-IN") : "Not synced yet"}</small></div><button class="btn2 alt" id="syncBtn">Sync</button></div>
         <div class="mrow"><span class="mi">🌐</span><div><b>Server</b><small>${esc(SERVER)}</small></div></div>
         <div class="actions" style="margin-top:14px"><button class="btn2 alt" id="logoutBtn">Log out</button></div>
@@ -489,17 +490,19 @@
     $("#mapBtn").onclick = downloadMap;
     if ($("#mapDel")) $("#mapDel").onclick = () => { NATIVE.deleteOfflineMap(); toast("Offline map deleted. Restart the app."); openMenu(); };
     $("#recT").onclick = () => { if (!NATIVE) return toast("Only in the Android app.");
-      if (NATIVE.isTracking()) { NATIVE.stopTracking(); store.set("recording", false); } else { store.set("recording", NATIVE.startTracking()); }
+      if (NATIVE.isTracking()) { NATIVE.stopTracking(); store.set("recording", false); if (ME && ME.share_live) toast("Live location also stops while recording is off in the background."); } else { store.set("recording", NATIVE.startTracking()); }
       setTimeout(openMenu, 400); };
     $("#tlOpen").onclick = openTimeline;
     $("#showT").onclick = async () => { if (!online()) return toast("Needs internet.");
       try { ME = await apiJSON("/me/settings", {method: "POST", body: form({show_on_map: ME.show_on_map ? 0 : 1})}); store.set("me", ME); openMenu(); } catch (e) { toast(e.message); } };
     $("#liveT").onclick = async () => { if (!online()) return toast("Needs internet.");
       try { ME = await apiJSON("/me/settings", {method: "POST", body: form({share_live: ME.share_live ? 0 : 1})}); store.set("me", ME);
-        toast(ME.share_live ? "Live location ON 🔴 – others can see where you are" : "Live location OFF"); if (ME.share_live) livePing(); openMenu(); } catch (e) { toast(e.message); } };
+        toast(ME.share_live ? "Live location ON 🔴 – also while you use other apps" : "Live location OFF");
+        if (ME.share_live && NATIVE && NATIVE.ignoresBatteryLimits && !NATIVE.ignoresBatteryLimits() && !store.get("batAsked", false)) { store.set("batAsked", true); setTimeout(() => NATIVE.askBatteryUnrestricted(), 800); } if (ME.share_live) livePing(); nativeAuth(); openMenu(); } catch (e) { toast(e.message); } };
     $("#shareT").onclick = async () => { if (!online()) return toast("Needs internet.");
       try { ME = await apiJSON("/me/settings", {method: "POST", body: form({share_path: ME.share_path ? 0 : 1})}); store.set("me", ME);
         toast(ME.share_path ? "Your path is now public 🚶" : "Your path is private again"); openMenu(); loadPaths().catch(() => {}); } catch (e) { toast(e.message); } };
+    if ($("#batBtn")) $("#batBtn").onclick = () => { NATIVE.askBatteryUnrestricted(); setTimeout(openMenu, 4000); };
     $("#syncBtn").onclick = () => sync(true);
     $("#logoutBtn").onclick = () => logout(false);
   }
@@ -884,6 +887,9 @@
       await loadOnline();
     } catch (e) { /* try next time */ }
   }
+  // hand the login to the phone's background service, so live location and journey upload
+  // keep working while another app is open or the screen is off
+  const nativeAuth = () => { if (NATIVE && NATIVE.setAuth && TOKEN) NATIVE.setAuth(SERVER, TOKEN, !!(ME && ME.share_live)); };
   let started = false;
   function startApp() {
     $("#auth").hidden = true; $("#appRoot").hidden = false;
@@ -895,7 +901,7 @@
       if (NATIVE && store.get("recording", true) && !NATIVE.isTracking()) store.set("recording", NATIVE.startTracking());
       setInterval(sync, 60000); setInterval(livePing, 20000);
     }
-    updateNetbar(); sync();
+    nativeAuth(); updateNetbar(); sync();
   }
   if (TOKEN) startApp(); else showAuth();
 })();

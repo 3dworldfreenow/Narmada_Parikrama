@@ -17,25 +17,37 @@ import android.os.Bundle
 import android.os.IBinder
 import android.os.Looper
 import androidx.core.app.NotificationCompat
+import java.util.concurrent.Executors
 
 /**
  * Foreground service that records the pilgrim's journey for "My timeline",
- * also when the screen is off or there is no internet. Uses the phone's GPS
- * directly (no Google Play services needed).
+ * also when the screen is off, another app is open, or there is no internet.
+ * Uses the phone's GPS directly (no Google Play services needed).
+ *
+ * In the background it also talks to the server by itself:
+ *  - "Share my live location" on: sends the position every ~20 s
+ *  - uploads recorded journey points every ~5 minutes when there is internet
  */
 class LocationService : Service(), LocationListener {
 
     private var lm: LocationManager? = null
     private var last: Location? = null
+    private var lastLiveSent = 0L
+    private var lastUpload = 0L
+    private var liveMode = false
+    private val net = Executors.newSingleThreadExecutor()
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
+            Net.setLive(this, false)          // stopping from the notification also stops live sharing
             stopSelf()
             return START_NOT_STICKY
         }
+        liveMode = Net.live(this)
         startInForeground()
+        lm?.removeUpdates(this)
         startUpdates()
         running = true
         return START_STICKY
@@ -56,8 +68,8 @@ class LocationService : Service(), LocationListener {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val n: Notification = NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_walk)
-            .setContentTitle("Narmade Har – recording your journey")
-            .setContentText("Your timeline is saved on this phone and uploaded when online.")
+            .setContentTitle(if (liveMode) "Narmade Har – sharing your live location" else "Narmade Har – recording your journey")
+            .setContentText(if (liveMode) "Other pilgrims can see where you are. Tap Stop to end." else "Your timeline is saved on this phone and uploaded when online.")
             .setOngoing(true)
             .setContentIntent(open)
             .addAction(0, "Stop", stop)
@@ -75,7 +87,9 @@ class LocationService : Service(), LocationListener {
         lm = m
         try {
             if (m.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-                m.requestLocationUpdates(LocationManager.GPS_PROVIDER, 30_000L, 30f, this, Looper.getMainLooper())
+                // live sharing needs fresher fixes; plain recording saves battery
+                if (liveMode) m.requestLocationUpdates(LocationManager.GPS_PROVIDER, 10_000L, 0f, this, Looper.getMainLooper())
+                else m.requestLocationUpdates(LocationManager.GPS_PROVIDER, 30_000L, 30f, this, Looper.getMainLooper())
             }
             if (m.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
                 m.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 60_000L, 50f, this, Looper.getMainLooper())
@@ -87,6 +101,13 @@ class LocationService : Service(), LocationListener {
 
     override fun onLocationChanged(loc: Location) {
         if (loc.accuracy > 250f) return                       // ignore very rough fixes
+        val now = System.currentTimeMillis()
+        if (liveMode && now - lastLiveSent > 20_000L) {
+            lastLiveSent = now
+            val body = "lat=${loc.latitude}&lng=${loc.longitude}&accuracy=${loc.accuracy}"
+            net.execute { Net.post(this, "/presence", body, "application/x-www-form-urlencoded") }
+        }
+        if (now - lastUpload > 5 * 60_000L) { lastUpload = now; net.execute { Net.uploadPoints(this) } }
         val prev = last
         // keep a point when we moved ~80 m, or every 10 minutes while standing still
         if (prev != null && loc.distanceTo(prev) < 80f && loc.time - prev.time < 10 * 60_000L) return
@@ -102,6 +123,8 @@ class LocationService : Service(), LocationListener {
     override fun onDestroy() {
         lm?.removeUpdates(this)
         running = false
+        net.execute { Net.uploadPoints(this) }
+        net.shutdown()
         super.onDestroy()
     }
 
@@ -109,6 +132,7 @@ class LocationService : Service(), LocationListener {
         const val CHANNEL = "journey"
         const val NOTIF_ID = 42
         const val ACTION_STOP = "com.opirsys.narmada.STOP"
+        const val ACTION_REFRESH = "com.opirsys.narmada.REFRESH"
         @Volatile var running = false
     }
 }

@@ -214,6 +214,29 @@ class MainActivity : Activity() {
             startService(Intent(this@MainActivity, LocationService::class.java).setAction(LocationService.ACTION_STOP))
         }
         @JavascriptInterface fun isTracking(): Boolean = LocationService.running
+
+        /** Login details for the background service. live=true keeps sharing location when the app is not on screen. */
+        @JavascriptInterface fun setAuth(server: String, token: String, live: Boolean) {
+            val was = Net.live(this@MainActivity)
+            Net.save(this@MainActivity, server, token, live)
+            if (live && !LocationService.running) startTracking()
+            else if (LocationService.running && was != live) {
+                ContextCompat.startForegroundService(this@MainActivity,
+                    Intent(this@MainActivity, LocationService::class.java).setAction(LocationService.ACTION_REFRESH))
+            }
+        }
+
+        /** Ask Android not to stop the app in the background (battery saver). */
+        @JavascriptInterface fun ignoresBatteryLimits(): Boolean =
+            Build.VERSION.SDK_INT < 23 || (getSystemService(Context.POWER_SERVICE) as android.os.PowerManager).isIgnoringBatteryOptimizations(packageName)
+        @SuppressLint("BatteryLife")
+        @JavascriptInterface fun askBatteryUnrestricted() {
+            if (Build.VERSION.SDK_INT < 23) return
+            runOnUiThread {
+                runCatching { startActivity(Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName"))) }
+                    .onFailure { runCatching { startActivity(Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) } }
+            }
+        }
         @JavascriptInterface fun pendingPoints(limit: Int): String = PointStore.read(this@MainActivity, limit)
         @JavascriptInterface fun pointCount(): Int = PointStore.count(this@MainActivity)
         @JavascriptInterface fun clearPoints(upToTs: Double) = PointStore.clearUpTo(this@MainActivity, upToTs)
