@@ -240,3 +240,30 @@ mark{background:#ffe08a;color:#1f2a2e;border-radius:3px}
 .vname{flex:1;min-width:0}.vname small{display:block;color:var(--muted,#5f6368);font-size:12px}
 .vname .nomap{color:#b06000}
 .vkm{text-align:right;font-weight:600;font-size:13px;white-space:nowrap}.vkm small{display:block;color:var(--muted,#5f6368);font-weight:400}
+/* ---------------------------------------------------------------- turn-by-turn navigation */
+body.navigating .panel, body.navigating .fabs, body.navigating .searchbox, body.navigating .results,
+body.navigating .topbar, body.navigating .leaflet-control-zoom, body.navigating .avatarbtn, body.navigating #avatarBtn{display:none!important}
+.navtop{position:fixed;left:10px;right:10px;top:calc(10px + env(safe-area-inset-top));z-index:2500;background:#0b6b3a;color:#fff;border-radius:16px;
+  padding:12px 14px;display:flex;align-items:center;gap:12px;box-shadow:0 6px 20px rgba(0,0,0,.3);flex-wrap:wrap}
+.navicon{flex:0 0 52px;height:52px;font:700 40px/52px sans-serif;text-align:center}
+.navtxt{flex:1;min-width:0}.navtxt b{display:block;font-size:20px;line-height:1.25}
+.navtxt small{display:block;opacity:.85;font-size:14px;margin-top:2px}
+.navdist{display:block;font:800 30px/1.1 sans-serif;margin-bottom:2px}
+.navwarn{flex-basis:100%;background:#fce8e6;color:#a50e0e;border-radius:10px;padding:6px 10px;font-size:13px;font-weight:600}
+.navbot{position:fixed;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:2500;background:var(--solid,#fff);color:var(--ink,#202124);
+  border-radius:16px;padding:10px 12px;display:flex;align-items:center;gap:10px;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+.navinfo{flex:1;min-width:0}.navrem{display:block;font-size:22px;color:#188038}
+.navinfo small{display:block;color:var(--muted,#5f6368);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.navbtn{border:none;border-radius:12px;background:#f1f3f4;font:600 18px/1 sans-serif;height:48px;min-width:48px;padding:0 12px;cursor:pointer}
+.navend{background:#d93025;color:#fff;font-size:16px;padding:0 20px}
+.navrecenter{position:fixed;right:14px;bottom:calc(96px + env(safe-area-inset-bottom));z-index:2500;border:none;border-radius:24px;
+  background:#fff;color:#1a73e8;font:700 15px/1 sans-serif;padding:13px 18px;box-shadow:0 3px 10px rgba(0,0,0,.3)}
+.navpuck{width:44px;height:44px;transition:transform .4s}
+.btn2.go{background:#188038;color:#fff;font-size:16px;padding:12px 22px}
+.ridebtn{display:block;width:100%;margin:10px 0;border:none;border-radius:14px;background:#188038;color:#fff;font:700 17px/1.2 inherit;padding:14px;cursor:pointer}
+.ridebtn small{display:block;font-weight:400;font-size:13px;opacity:.9;margin-top:3px}
+@media (min-width:761px){.navtop{left:auto;right:20px;width:420px}.navbot{left:auto;right:20px;width:420px}}
+
+/* compass (map turned) */
+#northBtn .needle{display:inline-block;color:#d93025;font-size:20px;transition:transform .2s}
+.navbtn.on{background:#1a73e8;color:#fff}

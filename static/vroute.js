@@ -5,7 +5,7 @@
   "use strict";
   const COL = {1: "#0f6e77", 2: "#c8641e", 3: "#7a4fb0"};
   const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"})[c]);
-  let D = null, map = null, box = null, onPick = null, layer = null, part = 0, drawn = false;
+  let D = null, map = null, box = null, onPick = null, onRide = null, getPos = null, layer = null, part = 0, drawn = false;
   const markers = {};
 
   function draw() {
@@ -38,6 +38,7 @@
     box.innerHTML = `
       <div class="vcredit">🏍 <b>Bike / four-wheeler route</b> by <b>${esc(c.by)}</b>, ${esc(c.place)}${c.phone ? ` · 📞 ${c.phone.map(n => `<a href="tel:${esc(n)}">${esc(n)}</a>`).join(", ")}` : ""}
         <small>${esc(c.note)}${placed < all ? ` · ${placed} of ${all} stops on the map` : ""}</small></div>
+      ${onRide ? `<button class="ridebtn" data-ride>🏍 Start riding the route<small>Turn-by-turn with voice, from the stop nearest to you, then stop after stop</small></button>` : ""}
       <div class="note warn">⛴ ${esc(D.boat)}</div>
       <div class="chiprow" role="group" aria-label="Part">
         <button class="chip2${part === 0 ? " on" : ""}" data-vp="0">All</button>
@@ -54,6 +55,7 @@
 
   function wire() {
     box.addEventListener("click", e => {
+      if (e.target.closest("[data-ride]")) return ride();
       const ch = e.target.closest("[data-vp]");
       if (ch) { part = +ch.dataset.vp; render(); fit(); return; }
       const r = e.target.closest("[data-vs]"); if (!r) return;
@@ -63,6 +65,25 @@
       if (onPick) onPick(s);
     });
   }
+  /** all placed stops in riding order (part 1 → boat → part 2 → part 3), from the one nearest to me */
+  function ride() {
+    const seq = [];
+    D.parts.forEach(p => p.stops.forEach((s, i) => {
+      if (s.lat == null) return;
+      const last = p.id === 1 && i === p.stops.length - 1;
+      seq.push({label: s.n, lat: s.lat, lng: s.lng, note: [s.note, last ? "Take the boat to Mithitalai – it runs from Dussehra to Akshaya Tritiya" : ""].filter(Boolean).join(". ")});
+    }));
+    if (!seq.length) return;
+    const me = getPos && getPos();
+    let k = 0;
+    if (me) {
+      let bd = Infinity;
+      seq.forEach((s, i) => { const d = kmBetween(me, [s.lat, s.lng]); if (d < bd) { bd = d; k = i; } });
+      if (bd < 3 && k < seq.length - 1) k++;              // already at that stop: go on to the next
+    }
+    onRide(seq.slice(k), "");
+  }
+
   function fit() {
     const pts = []; D.parts.forEach(p => { if (!part || p.id === part) p.stops.forEach(s => { if (s.lat != null) pts.push([s.lat, s.lng]); }); });
     if (pts.length) map.fitBounds(pts, {padding: [40, 40]});
@@ -130,7 +151,7 @@
       return {label: s.n, sub: where + how, lat: at.lat, lng: at.lng, approx: at.kind !== "exact"};
     },
     locate, guessBetween, findNear,
-    init(o) { D = o.data; map = o.map; box = o.box; onPick = o.onPick; layer = L.layerGroup(); if (box) wire(); return !!D; },
+    init(o) { D = o.data; map = o.map; box = o.box; onPick = o.onPick; onRide = o.onRide; getPos = o.getPos; layer = L.layerGroup(); if (box) wire(); return !!D; },
     show(on) { if (!D) return; if (on) { draw(); layer.addTo(map); render(); fit(); } else layer.remove(); },
     data: () => D,
   };

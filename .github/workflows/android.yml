@@ -10,6 +10,7 @@ on:
       - "data/narmada_river.json"
       - "static/river-rule.js"
       - "static/vroute.js"
+      - "static/nav.js"
       - "data/vehicle_route.json"
       - ".github/workflows/android.yml"
   workflow_dispatch:
@@ -41,6 +42,7 @@ jobs:
           cp static/app.css $WWW/app.css
           cp static/river-rule.js $WWW/river-rule.js
           cp static/vroute.js $WWW/vroute.js
+          cp static/nav.js $WWW/nav.js
           echo "window.VROUTE=$(cat data/vehicle_route.json 2>/dev/null || cat data/vehicle_route_src.json);" > $WWW/vehicle-route.js
           echo "window.RIVER=$(cat data/narmada_river.json);" > $WWW/river-data.js
           python3 - <<'PY'
@@ -54,6 +56,9 @@ jobs:
           curl -fsSL -o $WWW/lib/leaflet.js  https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js
           curl -fsSL -o $WWW/lib/leaflet.css https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css
           curl -fsSL -o $WWW/lib/protomaps-leaflet.js https://unpkg.com/protomaps-leaflet@5.1.0/dist/protomaps-leaflet.js
+          # two-finger map rotation; the app still works (without rotation) if this download fails
+          curl -fsSL -o $WWW/lib/leaflet-rotate.js https://unpkg.com/leaflet-rotate@0.2 || echo "/* leaflet-rotate not available */" > $WWW/lib/leaflet-rotate.js
+          head -c 300 $WWW/lib/leaflet-rotate.js; echo
           ls -la $WWW $WWW/lib
 
       - name: Signing key from secrets (optional)

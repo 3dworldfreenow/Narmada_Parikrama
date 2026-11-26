@@ -9,6 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=Noto+Sans+Devanagari:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://unpkg.com/leaflet-rotate@0.2"></script>
 {% if local_map %}<script src="https://unpkg.com/protomaps-leaflet@5.1.0/dist/protomaps-leaflet.js"></script>{% endif %}
 <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
 </head>
@@ -111,6 +112,7 @@
   <button class="fab" id="locBtn" title="Show my location" aria-label="Show my location">
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
   </button>
+  <button class="fab" id="northBtn" hidden title="Turn the map north up" aria-label="Turn the map north up"><span class="needle">▲</span></button>
   <button class="fab fullfab" id="fullBtn" title="Full-screen map" aria-label="Full-screen map">
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg>
   </button>
@@ -137,6 +139,7 @@ const STAGES = {1:{n:"Stage 1",b:"South bank",c:"#0f6e77"}, 2:{n:"Stage 2",b:"No
 <script src="{{ url_for('static', filename='river-rule.js') }}"></script>
 <script src="{{ url_for('vehicle_route_data') }}"></script>
 <script src="{{ url_for('static', filename='vroute.js') }}"></script>
+<script src="{{ url_for('static', filename='nav.js') }}"></script>
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>

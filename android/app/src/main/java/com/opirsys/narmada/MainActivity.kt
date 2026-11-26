@@ -13,6 +13,9 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
+import android.speech.tts.TextToSpeech
+import android.view.WindowManager
+import java.util.Locale
 import android.util.Base64
 import android.webkit.GeolocationPermissions
 import android.webkit.JavascriptInterface
@@ -43,6 +46,8 @@ class MainActivity : Activity() {
     private lateinit var web: WebView
     private var fileCallback: ValueCallback<Array<Uri>>? = null
     private var cameraUri: Uri? = null
+    private var tts: TextToSpeech? = null
+    private var ttsReady = false
     private var geoCallback: Pair<String, GeolocationPermissions.Callback>? = null
 
     private val assetLoader by lazy {
@@ -138,6 +143,7 @@ class MainActivity : Activity() {
         web.evaluateJavascript("window.appOpen && window.appOpen(${org.json.JSONObject.quote(o)})", null)
     }
     override fun onResume() { super.onResume(); inForeground = true }
+    override fun onDestroy() { tts?.shutdown(); super.onDestroy() }
     override fun onPause() { inForeground = false; super.onPause() }
 
     // ---------------------------------------------------------------- offline map with Range support
@@ -227,6 +233,31 @@ class MainActivity : Activity() {
         @JavascriptInterface fun isTracking(): Boolean = LocationService.running
 
         /** Login details for the background service. live=true keeps sharing location when the app is not on screen. */
+        /** Spoken turn-by-turn directions (Indian English voice if the phone has one). */
+        @JavascriptInterface fun speak(text: String) {
+            runOnUiThread {
+                val t = tts
+                if (t == null) {
+                    tts = TextToSpeech(this@MainActivity) { st ->
+                        ttsReady = st == TextToSpeech.SUCCESS
+                        if (ttsReady) {
+                            val r = tts!!.setLanguage(Locale("en", "IN"))
+                            if (r == TextToSpeech.LANG_MISSING_DATA || r == TextToSpeech.LANG_NOT_SUPPORTED) tts!!.setLanguage(Locale.ENGLISH)
+                            tts!!.speak(text, TextToSpeech.QUEUE_FLUSH, null, "nav")
+                        }
+                    }
+                } else if (ttsReady) t.speak(text, TextToSpeech.QUEUE_FLUSH, null, "nav")
+            }
+        }
+
+        /** Keep the screen on while navigating. */
+        @JavascriptInterface fun keepAwake(on: Boolean) {
+            runOnUiThread {
+                if (on) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
+        }
+
         @JavascriptInterface fun takeOpen(): String { val o = pendingOpen ?: ""; pendingOpen = null; return o }
 
         @JavascriptInterface fun setAuth(server: String, token: String, live: Boolean, family: Boolean) {

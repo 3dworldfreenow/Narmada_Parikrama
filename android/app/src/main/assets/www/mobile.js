@@ -14,6 +14,7 @@
   const fmtMB = b => b > 1e9 ? (b / 1e9).toFixed(2) + " GB" : Math.round(b / 1e6) + " MB";
   const hue = s => { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) % 360; return `hsl(${h} 55% 45%)`; };
   const NATIVE = window.Android || null;      // native helpers (missing when testing in a normal browser)
+  if (NATIVE && NATIVE.speak) { window.NATIVE_SPEAK = t => NATIVE.speak(t); window.NATIVE_AWAKE = on => NATIVE.keepAwake(on); }
   const STAGES = {1:{n:"Stage 1",b:"South bank",c:"#0f6e77"}, 2:{n:"Stage 2",b:"North bank",c:"#c8641e"}, 3:{n:"Stage 3",b:"South bank",c:"#7a4fb0"}};
   const REPORT_KINDS_DEFAULT = {good:"✅ Good path", closed:"⛔ Road/path closed", mud:"🟤 Muddy / slippery", water_high:"🌊 Flooded / water high",
     bridge:"🌉 Bridge or boat problem", danger:"⚠️ Danger (animals, theft…)", water:"💧 Drinking water here", food:"🍲 Food / chai here", rest:"🛖 Rest place / shade", other:"📝 Other"};
@@ -111,7 +112,8 @@
   // ================================================================ map
   let map, markers = {}, placed = [], layers = {};
   function initMap() {
-    map = L.map("map", {zoomControl: false, preferCanvas: true}).setView([22.4, 77.5], 7);
+    // two-finger rotate (leaflet-rotate add-on; without it the map just doesn't rotate)
+    map = L.map("map", {zoomControl: false, preferCanvas: true, rotate: true, touchRotate: true, shiftKeyRotate: true, rotateControl: false, bearing: 0}).setView([22.4, 77.5], 7);
     const ATTR = '&copy; OpenStreetMap contributors';
     let usedOffline = false;
     if (NATIVE && NATIVE.hasOfflineMap() && window.protomapsL) {
@@ -152,7 +154,7 @@
     if (v !== "listView") setSheet("half");
   }
   function back() { const v = viewStack.pop(); if (!v) return false; show(v, false); if (v === "listView") render(false); return true; }
-  window.appBack = () => { if (!$("#pviewer").hidden) { $("#pviewer").hidden = true; return true; } if (panel.dataset.size === "map") { setSheet("half"); return true; } if (!$("#results").hidden) { $("#results").hidden = true; return true; } if (pickMode) { pickMode = null; return true; } return back(); };
+  window.appBack = () => { if (window.Nav && Nav.active()) { Nav.stop(); return true; } if (!$("#pviewer").hidden) { $("#pviewer").hidden = true; return true; } if (panel.dataset.size === "map") { setSheet("half"); return true; } if (!$("#results").hidden) { $("#results").hidden = true; return true; } if (pickMode) { pickMode = null; return true; } return back(); };
   const backBtn = l => `<button class="back" data-back>← ${l || "Back"}</button>`;
   document.addEventListener("click", e => { if (e.target.closest("[data-back]")) back(); });
   const panel = $("#panel");
@@ -202,7 +204,7 @@
     $("#detailView").innerHTML = `
       <div class="dhead">${backBtn("All stops")}<h2>${esc(o.v || "(not named)")} <span class="mr" style="font-size:16px;color:var(--muted)">${esc(o.vm)}</span></h2>
         <div class="sub">${STAGES[o.st].n} · ${STAGES[o.st].b} · No. ${esc(o.n || "–")} · ${esc(o.cum || "–")} km${o.lat == null ? " · not on map yet" : ""}${myPos && o.lat != null ? " · " + fmtKm(km(myPos, [o.lat, o.lng])) + " from you" : ""}</div>
-        <div class="actions">${o.lat != null ? `<button class="btn2" data-dir>➤ Directions</button>${nx ? `<button class="btn2 alt" data-next>To next stop</button>` : ""}` : ""}
+        <div class="actions">${o.lat != null ? `<button class="btn2 go" data-start>▶ Start</button><button class="btn2" data-dir>➤ Directions</button>${nx ? `<button class="btn2 alt" data-next>To next stop</button>` : ""}` : ""}
           <button class="btn2 alt" data-upd>✎ Update</button>${o.lat != null ? `<button class="btn2 alt" data-rep>⚑ Report</button>` : ""}</div></div>
       <div class="dbody">${o.sp ? `<div class="note">${esc(o.sp)}</div>` : ""}
         <div class="facts">${fact("Stay", o.acc, 1)}${fact("Temples", o.te, 1)}${fact("Tirth", o.ti)}${fact("Sangam", o.sa)}${fact("Cooked food", o.fd)}${fact("Sadavrat", o.sd)}
@@ -213,6 +215,7 @@
     const dv = $("#detailView");
     const q = s => dv.querySelector(s);
     if (q("[data-dir]")) q("[data-dir]").onclick = () => openDirections(null, stopPoint(o));
+    if (q("[data-start]")) q("[data-start]").onclick = () => startNav(stopPoint(o));
     if (q("[data-next]")) q("[data-next]").onclick = () => openDirections(stopPoint(o), stopPoint(nx));
     q("[data-upd]").onclick = () => openUpdate(o);
     if (q("[data-rep]")) q("[data-rep]").onclick = () => openReport(o.lat, o.lng);
@@ -269,12 +272,13 @@
     const near = placed.map(o => [o, km([p.lat, p.lng], [o.lat, o.lng])]).sort((a, b) => a[1] - b[1]).slice(0, 3);
     const rep = REPORTS.filter(r => km([p.lat, p.lng], [r.lat, r.lng]) < 3);
     $("#placeView").innerHTML = `<div class="dhead">${backBtn()}<h2>${esc(p.label)}</h2><div class="sub">${esc(p.sub || "")}${myPos ? " · " + fmtKm(km(myPos, [p.lat, p.lng])) + " from you" : ""}</div>
-      <div class="actions"><button class="btn2" data-go>➤ Directions</button><button class="btn2 alt" data-rep>⚑ Report path here</button></div></div>
+      <div class="actions"><button class="btn2 go" data-start>▶ Start</button><button class="btn2" data-go>➤ Directions</button><button class="btn2 alt" data-rep>⚑ Report path here</button></div></div>
       <div class="dbody">${rep.length ? `<div class="fact wide" style="margin-bottom:10px"><b>Path reports nearby</b>${rep.map(r => `<div>${esc(r.label)}${r.note ? " – " + esc(r.note) : ""} <small class="muted">@${esc(r.by)}</small></div>`).join("")}</div>` : ""}
       <div class="fact wide"><b>Nearest parikrama stops</b>${near.map(([o, d]) => `<div class="ri" data-stop="${o._i}" style="padding:6px 0"><span class="ric" style="background:${STAGES[o.st].c}">${esc(o.n || "·")}</span><div><b>${esc(o.v)}</b><small>${fmtKm(d)}</small></div></div>`).join("")}</div></div>`;
     show("placeView");
     const pv = $("#placeView");
     pv.querySelector("[data-go]").onclick = () => openDirections(null, {label: p.label, lat: p.lat, lng: p.lng});
+    pv.querySelector("[data-start]").onclick = () => startNav({label: p.label, lat: p.lat, lng: p.lng});
     pv.querySelector("[data-rep]").onclick = () => openReport(p.lat, p.lng);
     pv.querySelectorAll("[data-stop]").forEach(el => el.onclick = () => openStop(+el.dataset.stop, true));
   }
@@ -304,7 +308,7 @@
   // ================================================================ directions (internet needed)
   const ROUTERS = {car: "https://routing.openstreetmap.de/routed-car/route/v1/driving/", bike: "https://routing.openstreetmap.de/routed-car/route/v1/driving/", walk: "https://routing.openstreetmap.de/routed-foot/route/v1/driving/"};
   const MODE = {car: "🚗 Car", bike: "🏍 Bike", walk: "🚶 Paidal"}, GMODE = {car: "driving", bike: "driving", walk: "walking"};
-  const dir = {from: null, to: null, mode: "walk"};
+  const dir = {from: null, to: null, mode: (() => { try { return localStorage.getItem("dirMode") || "bike"; } catch (e) { return "bike"; } })()};
   function openDirections(from, to) {
     dir.from = from || {label: "My location", me: true}; dir.to = to;
     $("#dirView").innerHTML = `<div class="dhead">${backBtn()}<h2 style="font-size:20px">Directions</h2>
@@ -314,6 +318,8 @@
       <div class="ep"><span class="epdot b"></span><input id="toIn" placeholder="Destination"><button class="epbtn" data-me="to">◎</button><button class="epbtn" data-pick="to">⌖</button></div>
       <button class="swap" id="swap">⇅</button><div class="results inpanel" id="epResults" hidden></div></div></div><div class="dbody" id="dirOut"></div>`;
     show("dirView");
+    $("#dirOut").addEventListener("click", e => { if (!e.target.closest("[data-navstart]")) return;
+      if (!dir.to || dir.to.me) return; startNav(dir.to, {route: dir.from && dir.from.me ? lastBest : null}); });
     const fill = () => { $("#fromIn").value = dir.from ? dir.from.label : ""; $("#toIn").value = dir.to ? dir.to.label : ""; }; fill();
     [["from", $("#fromIn")], ["to", $("#toIn")]].forEach(([k, inp]) => { let t; inp.oninput = () => { clearTimeout(t); t = setTimeout(() => suggest(inp.value.trim(), $("#epResults"), pk => {
       if (pk.veh) { VRoute.place(pk.veh, online()).then(pl => { if (!pl) return toast("That stop isn't on the map yet."); dir[k] = {label: pl.label, lat: pl.lat, lng: pl.lng}; fill(); route(); }); return; }
@@ -323,7 +329,7 @@
     $$("#dirView [data-pick]").forEach(b => b.onclick = () => { const k = b.dataset.pick; toast("Tap the map"); setSheet("min"); pickMode = (la, ln) => { dir[k] = {label: `Pin ${la.toFixed(4)}, ${ln.toFixed(4)}`, lat: la, lng: ln}; fill(); setSheet("half"); route(); }; });
     $("#swap").onclick = () => { [dir.from, dir.to] = [dir.to, dir.from]; fill(); route(); };
     $("#ruleT").onchange = e => { RULE = e.target.checked; store.set("riverRule", RULE); route(); };
-    $$("#dirView [data-mode]").forEach(b => b.onclick = () => { dir.mode = b.dataset.mode; $$("#dirView [data-mode]").forEach(x => x.setAttribute("aria-selected", x === b)); route(); });
+    $$("#dirView [data-mode]").forEach(b => b.onclick = () => { dir.mode = b.dataset.mode; try { localStorage.setItem("dirMode", dir.mode); } catch (e) { /* ignore */ } $$("#dirView [data-mode]").forEach(x => x.setAttribute("aria-selected", x === b)); route(); });
     route();
   }
   const resolvePt = p => new Promise(res => !p ? res(null) : !p.me ? res([p.lat, p.lng]) : withMyPos(res, () => res(null)));
@@ -334,6 +340,20 @@
   // ---- parikrama rule: never cross the Narmada (river-rule.js + river-data.js bundled in the app)
   let RULE = store.get("riverRule", true);
   const RR = window.RiverRule && window.RIVER && window.RiverRule.init(window.RIVER) ? window.RiverRule : null;
+  // ---------------------------------------------------------------- turn-by-turn navigation (static/nav.js)
+  let lastBest = null, wakeLock = null;
+  const AWAKE = on => { if (window.NATIVE_AWAKE) return window.NATIVE_AWAKE(on);
+    try { if (on && navigator.wakeLock) navigator.wakeLock.request("screen").then(l => { wakeLock = l; }).catch(() => {}); else if (!on && wakeLock) { wakeLock.release(); wakeLock = null; } } catch (e) { /* ignore */ } };
+  function startNav(to, opts) {
+    if (!window.Nav) return toast("Navigation is not available here.");
+    const mode = (opts && opts.mode) || dir.mode;
+    try {
+      Nav.start(Object.assign({map, router: ROUTERS[mode], mode, dest: to, from: (lastFix ? [lastFix.lat, lastFix.lng] : myPos) || null, online: online, speak: window.NATIVE_SPEAK, keepAwake: AWAKE,
+        checkRiver: RULE && RR && mode !== "car" ? coords => RR.crossings(coords).length : null,
+        onStart: () => { results.hidden = true; layers.pin.clearLayers(); setSheet("map"); }, onEnd: () => setSheet("half")}, opts || {}));
+    } catch (e) { toast(e.message); }
+  }
+
   const BANK = {north: "north (uttar) bank", south: "south (dakshin) bank"};
   const X_ICON = L.divIcon({className: "", iconSize: [26, 26], iconAnchor: [13, 13], html: '<div class="xmark">✕</div>'});
   function drawBankPath(bp) {
@@ -362,11 +382,12 @@
     return best;
   }
   function routeHtml(best, a, b, note) {
+    lastBest = best;
     const steps = best.steps.filter(s => s.distance > 0 || s.maneuver.type === "arrive");
     const g = `https://www.google.com/maps/dir/?api=1&origin=${a[0]},${a[1]}&destination=${b[0]},${b[1]}&travelmode=${GMODE[dir.mode]}`;
     setTimeout(() => { const gn = $("#gnav"); if (gn) gn.onclick = () => NATIVE ? NATIVE.openExternal(g) : window.open(g); }, 0);
     return `<div class="routesum"><span class="rtime">${fmtTime(best.duration * (dir.mode === "bike" ? .85 : 1))}</span> <span class="rdist">(${fmtKm(best.distance / 1000)})</span><small>${MODE[dir.mode]} · by road, OpenStreetMap</small></div>
-      ${note || ""}<div class="actions" style="margin-bottom:10px"><button class="btn2" id="gnav">▶ Start in Google Maps</button></div>
+      ${note || ""}<div class="actions" style="margin-bottom:10px"><button class="btn2 go" data-navstart>▶ Start</button><button class="btn2 alt" id="gnav">Google Maps ↗</button></div>
       ${RULE ? `<p class="hintline">Google Maps may pick a road that crosses the river – follow the blue line here.</p>` : ""}
       <ol class="steps">${steps.slice(0, 60).map(s => `<li><span class="si">↑</span><span>${stepText(s)}</span><small>${s.distance ? fmtKm(s.distance / 1000) : ""}</small></li>`).join("")}</ol>`;
   }
@@ -1045,9 +1066,19 @@
     })();
 
 
+
+    // ---------------------------------------------------------------- compass: shows when the map is turned; tap = north up
+    (function compass() {
+      const b = $("#northBtn"); if (!b) return;
+      if (typeof map.setBearing !== "function") { b.hidden = true; return; }
+      const upd = () => { const d = map.getBearing() || 0; b.hidden = Math.abs(((d + 540) % 360) - 180) < 1; b.firstElementChild.style.transform = `rotate(${d}deg)`; };
+      map.on("rotate", upd); upd();
+      b.onclick = () => map.setBearing(0);
+    })();
     // ---------------------------------------------------------------- walking guide ↔ bike / car route
     (function routeSwitch() {
-      const has = window.VRoute && VRoute.init({data: window.VROUTE, map, box: $("#vehBox"), onPick: () => setSheet("min")});
+      const has = window.VRoute && VRoute.init({data: window.VROUTE, map, box: $("#vehBox"), onPick: () => setSheet("min"), getPos: () => lastFix ? [lastFix.lat, lastFix.lng] : myPos,
+      onRide: (chain, intro) => startNav(chain[0], {chain, mode: "bike", checkRiver: null, intro})});
       const sw = $(".routesw"); if (!has) { sw.hidden = true; return; }
       const set = r => {
         $$(".routesw [data-route]").forEach(b => b.setAttribute("aria-checked", b.dataset.route === r));
