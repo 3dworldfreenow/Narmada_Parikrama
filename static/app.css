@@ -267,3 +267,7 @@ body.navigating .topbar, body.navigating .leaflet-control-zoom, body.navigating 
 /* compass (map turned) */
 #northBtn .needle{display:inline-block;color:#d93025;font-size:20px;transition:transform .2s}
 .navbtn.on{background:#1a73e8;color:#fff}
+
+/* guests: Log in / Join instead of the avatar */
+.guestbtns{display:flex;gap:6px;flex-shrink:0}.guestbtns .btn2{padding:9px 12px;font-size:14px;text-decoration:none;white-space:nowrap}
+@media (max-width:760px){.guestbtns .btn2.alt{display:none}}

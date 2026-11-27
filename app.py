@@ -441,6 +441,12 @@ def check_csrf():
 
 # Pages anyone may open without logging in / sharing location.
 OPEN_ENDPOINTS = {"login", "register", "static", "logout", "choose_username", "locate", "api_location", "geo_photo_file"}
+# The public website: anyone can look (GET) without an account – the map, stops, approved updates and photos,
+# public camera photos, shared yatra paths and path reports. Adding or changing anything needs a login.
+# Set PUBLIC_SITE=0 to make the whole website login-only again.
+PUBLIC_SITE = os.environ.get("PUBLIC_SITE", "1") != "0"
+PUBLIC_VIEW = {"index", "map_view", "stop_detail", "vehicle_route_data", "river_data", "map_tiles", "media_file",
+               "api_online", "api_paths", "api_photos", "api_reports"}
 
 
 @app.before_request
@@ -451,6 +457,8 @@ def require_login_and_location():
         return None
     user = current_user()
     if not user:
+        if PUBLIC_SITE and ep in PUBLIC_VIEW and request.method in ("GET", "HEAD"):
+            return None                                    # looking around as a guest
         if ep.startswith("api_"):
             return {"error": "login required"}, 401
         return redirect(url_for("login", next=request.full_path if request.query_string else request.path))
@@ -973,12 +981,13 @@ def api_online():
            WHERE last_seen_ts >= ? AND username IS NOT NULL ORDER BY last_seen_ts DESC""", (since,)).fetchall()
     out = []
     for r in rows:
-        live = bool(r["share_live"]) and r["last_lat"] is not None
-        visible = live or (bool(r["show_on_map"]) and r["last_lat"] is not None)
+        # exact live positions are shared with pilgrims (logged in), not with anonymous visitors
+        live = bool(r["share_live"]) and r["last_lat"] is not None and me is not None
+        visible = live or ((bool(r["show_on_map"]) or bool(r["share_live"])) and r["last_lat"] is not None)
         nd = 5 if live else 2
         out.append({"live": live, "acc": round(r["last_acc"]) if live and r["last_acc"] is not None else None,
                     "sec": int(datetime.now(timezone.utc).timestamp() - r["last_seen_ts"]),
-            "u": r["username"], "me": r["id"] == me["id"],
+            "u": r["username"], "me": bool(me) and r["id"] == me["id"],
             "role": r["role"] if r["role"] in ("admin", "super") else "",
             "lat": round(r["last_lat"], nd) if visible else None,
             "lng": round(r["last_lng"], nd) if visible else None,
@@ -1053,13 +1062,14 @@ def save_geo_photo(user, form, fs):
 def list_geo_photos(user, args):
     """Photos in a map area (?bbox=south,west,north,east), mine (?mine=1, optional &day=YYYY-MM-DD),
     or one family member's (?u=username). Family-only photos are shown to the owner and their family."""
-    fam = family_ids(user["id"])
+    uid = user["id"] if user else -1
+    fam = family_ids(uid) if user else set()
     where = [f"(g.visibility='public' OR g.user_id=? OR (g.visibility='family' AND g.user_id IN ({','.join('?' * len(fam)) or 'NULL'})))"]
-    vals = [user["id"], *fam]
+    vals = [uid, *fam]
     if args.get("u"):
         where.append("u.username=?"); vals.append(args["u"])
     if args.get("mine"):
-        where.append("g.user_id=?"); vals.append(user["id"])
+        where.append("g.user_id=?"); vals.append(uid)
         if args.get("day"):
             try:
                 a, b = _day_bounds(args["day"]); where.append("g.taken_ts>=? AND g.taken_ts<?"); vals += [a, b]
@@ -1072,8 +1082,8 @@ def list_geo_photos(user, args):
     rows = get_db().execute(f"""SELECT g.*, u.username FROM geo_photos g JOIN users u ON u.id=g.user_id
                                 {"WHERE " + " AND ".join(where) if where else ""} ORDER BY g.taken_ts DESC LIMIT ?""",
                             vals + [lim]).fetchall()
-    adm = user["role"] == "admin"
-    return {"photos": [geo_photo_json(r, user["id"], adm) for r in rows]}
+    adm = bool(user) and user["role"] == "admin"
+    return {"photos": [geo_photo_json(r, uid, adm) for r in rows]}
 
 
 def delete_geo_photo(user, photo_id):
@@ -1279,13 +1289,14 @@ def public_paths(me_id):
 
 @app.route("/api/paths")
 def api_paths():
-    return public_paths(current_user()["id"])
+    me = current_user()
+    return public_paths(me["id"] if me else None)
 
 
 @app.route("/api/reports")
 def api_reports():
     """Approved path reports from the last REPORT_DAYS days (plus my own pending ones)."""
-    me = current_user()
+    me = current_user() or {"id": -1}
     since = datetime.now(timezone.utc).timestamp() - REPORT_DAYS * 86400
     rows = get_db().execute(
         """SELECT r.*, u.username FROM path_reports r JOIN users u ON u.id=r.user_id

@@ -27,6 +27,7 @@
     </button>
     <div class="results" id="results" role="listbox" hidden></div>
   </label>
+  {% if user %}
   <div class="usermenu">
     <button class="avatar" id="avatarBtn" aria-haspopup="true" aria-expanded="false" title="@{{ user.username }}">
       {{ (user.username or '?')[:1]|upper }}{% if pending_count %}<span class="dotbadge">{{ pending_count }}</span>{% endif %}
@@ -44,6 +45,9 @@
       <form method="post" action="{{ url_for('logout') }}"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button>Log out</button></form>
     </div>
   </div>
+  {% else %}
+  <div class="guestbtns"><a class="btn2 alt" href="{{ url_for('login') }}">Log in</a><a class="btn2" href="{{ url_for('register') }}">Join</a></div>
+  {% endif %}
 </header>
 
 {% with msgs = get_flashed_messages(with_categories=true) %}{% if msgs %}
@@ -123,9 +127,10 @@
 
 <script>
 const DATA = {{ data|tojson }};
-const ME = {{ user.username|tojson }};
+const ME = {{ (user.username if user else none)|tojson }};       // null = guest (just looking)
+const LOGIN = {{ url_for('login')|tojson }};
 const CSRF = {{ csrf_token()|tojson }};
-const LIVE = {{ 1 if user.share_live else 0 }};
+const LIVE = {{ 1 if user and user.share_live else 0 }};
 const URLS = {stop: {{ url_for('stop_detail', stop_id=0)|tojson }}.replace(/0$/, ""),
               edit: {{ url_for('edit_stop', stop_id=0)|tojson }}.replace(/0\/edit$/, ""),
               online: {{ url_for('api_online')|tojson }}, paths: {{ url_for('api_paths')|tojson }}, photos: {{ url_for('api_photos')|tojson }},

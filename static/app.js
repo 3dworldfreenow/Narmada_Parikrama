@@ -451,7 +451,10 @@
         .addTo(reportLayer));
     } catch (e) { /* ignore */ }
   }
+  const needLogin = what => { if (ME) return false;
+    alertMsg(`Log in or join to ${what}.`); setTimeout(() => { location.href = LOGIN + "?next=" + encodeURIComponent(location.pathname); }, 1200); return true; };
   function openReport(lat, lng) {
+    if (needLogin("report a path")) return;
     let spot = lat != null ? [lat, lng] : null, kind = null, mode = "all", noteVal = "";
     const keepNote = () => { const n = $("#rNote"); if (n) noteVal = n.value; draw(); };
     function draw() {
@@ -516,10 +519,12 @@
   }
   function beat(p) {
     lastSent = Date.now();
+    if (!ME) return;                                   // guests don't appear online
     post(URLS.beat, p ? {lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy} : {})
       .then(r => { if (r.status === 428 || r.status === 401) location.reload(); }).catch(() => {});
   }
-  if (navigator.geolocation) navigator.geolocation.watchPosition(setMyPos, () => {}, {enableHighAccuracy: true, maximumAge: 60000});
+  // pilgrims share their position; guests are only asked when they tap "my location"
+  if (ME && navigator.geolocation) navigator.geolocation.watchPosition(setMyPos, () => {}, {enableHighAccuracy: true, maximumAge: 60000});
   setInterval(() => { if (Date.now() - lastSent > 60000) beat(null); }, 30000);
   beat(null);
 
@@ -646,8 +651,10 @@
   $("#fitBtn").onclick = () => { roadLayer.clearLayers(); pinLayer.clearLayers(); fitVisible(); };
 
   const av = $("#avatarBtn"), menu = $("#menu");
-  av.onclick = e => { e.stopPropagation(); menu.hidden = !menu.hidden; av.setAttribute("aria-expanded", !menu.hidden); };
-  document.addEventListener("click", e => { if (!menu.hidden && !menu.contains(e.target)) { menu.hidden = true; av.setAttribute("aria-expanded", "false"); } });
+  if (av) {                                            // (guests have Log in / Join buttons instead)
+    av.onclick = e => { e.stopPropagation(); menu.hidden = !menu.hidden; av.setAttribute("aria-expanded", !menu.hidden); };
+    document.addEventListener("click", e => { if (!menu.hidden && !menu.contains(e.target)) { menu.hidden = true; av.setAttribute("aria-expanded", "false"); } });
+  }
 
   const panel = $("#panel"), order = ["min", "half", "full"];
   function setSheet(s) { if (window.innerWidth > 760 && s !== "map" && panel.dataset.size !== "map") return; panel.dataset.size = s; setTimeout(() => map.invalidateSize(), 260); }

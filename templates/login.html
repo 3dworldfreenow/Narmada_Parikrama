@@ -3,7 +3,7 @@
 {% block body %}
 <main class="auth">
   <section class="card panel form">
-    <div class="brandmark">नर्मदे हर</div><h1>Narmada Parikrama Guide</h1><p class="meta">Log in to see the route map, stops, and pilgrims online now.</p>
+    <div class="brandmark">नर्मदे हर</div><h1>Narmada Parikrama Guide</h1><p class="meta">Log in to add updates, photos and path reports, see family and live locations, and record your yatra.</p>
     <form method="post">
       <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
       <label for="login">Username or email</label><input type="text" id="login" name="login" required autocapitalize="off" autocomplete="username">
@@ -11,6 +11,7 @@
       <p style="margin-top:18px"><button class="btn">Log in</button></p>
     </form>
     <p class="meta">New here? <a href="{{ url_for('register') }}">Create an account</a></p>
+    <p class="meta">Or <a href="{{ url_for('index') }}">just look at the map</a> – no account needed.</p>
   </section>
 </main>
 {% endblock %}
